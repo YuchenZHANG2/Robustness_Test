@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="step-container">
+    <h2>Running Robustness Tests</h2>
+    <p class="step-description">Testing models across all selected corruptions and severity levels...</p>
+    
+    <div class="section">
+        <div class="test-progress">
+            <div class="progress-info">
+                <h3>Progress</h3>
+                <p id="progress-text">Initializing...</p>
+                <div class="progress-container">
+                    <div class="progress-bar-fill" id="test-progress" style="width: 0%;"></div>
+                </div>
+                <p class="progress-percentage" id="progress-percentage">0%</p>
+            </div>
+            
+            <div class="test-log">
+                <h4>Test Log</h4>
+                <div id="log-container" class="log-content">
+                    <p>Starting tests...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let progressInterval;
+    
+    window.onload = function() {
+        const progressBar = document.getElementById('test-progress');
+        const progressText = document.getElementById('progress-text');
+        const progressPercentage = document.getElementById('progress-percentage');
+        const logContainer = document.getElementById('log-container');
+        
+        function updateProgress(data) {
+            progressBar.style.width = data.progress + '%';
+            progressPercentage.textContent = data.progress + '%';
+            progressText.textContent = data.message;
+            
+            // Add to log
+            const logEntry = document.createElement('p');
+            logEntry.textContent = `[${new Date().toLocaleTimeString()}] ${data.message}`;
+            logContainer.appendChild(logEntry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+        
+        function pollProgress() {
+            fetch('/test_progress')
+                .then(response => response.json())
+                .then(data => {
+                    updateProgress(data);
+                    
+                    if (data.status === 'completed') {
+                        clearInterval(progressInterval);
+                        setTimeout(() => {
+                            window.location.href = '/show_results';
+                        }, 1000);
+                    } else if (data.status === 'error') {
+                        clearInterval(progressInterval);
+                        updateProgress({progress: 0, message: 'Error: ' + data.message});
+                    }
+                })
+                .catch(error => {
+                    console.error('Error polling progress:', error);
+                });
+        }
+        
+        // Start the test
+        updateProgress({progress: 5, message: 'Starting test...'});
+        
+        fetch('/execute_test')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    updateProgress({progress: 10, message: 'Test running in background...'});
+                    // Poll for progress every 2 seconds
+                    progressInterval = setInterval(pollProgress, 2000);
+                } else {
+                    updateProgress({progress: 0, message: 'Error: ' + data.error});
+                }
+            })
+            .catch(error => {
+                updateProgress({progress: 0, message: 'Error: ' + error.toString()});
+            });
+    };
+</script>
+
+<style>
+    .test-progress {
+        padding: 20px;
+    }
+    
+    .progress-info {
+        margin-bottom: 30px;
+    }
+    
+    .progress-info h3 {
+        color: #667eea;
+        margin-bottom: 15px;
+    }
+    
+    .progress-container {
+        width: 100%;
+        height: 40px;
+        background: #e0e0e0;
+        border-radius: 20px;
+        overflow: hidden;
+        margin: 15px 0;
+    }
+    
+    .progress-bar-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #667eea, #764ba2);
+        transition: width 0.5s ease;
+    }
+    
+    .progress-percentage {
+        text-align: center;
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: #667eea;
+    }
+    
+    .test-log {
+        background: #2d2d2d;
+        border-radius: 8px;
+        padding: 20px;
+        margin-top: 20px;
+    }
+    
+    .test-log h4 {
+        color: #ffffff;
+        margin-bottom: 15px;
+    }
+    
+    .log-content {
+        background: #1a1a1a;
+        color: #00ff00;
+        font-family: 'Courier New', monospace;
+        padding: 15px;
+        border-radius: 4px;
+        max-height: 300px;
+        overflow-y: auto;
+        font-size: 0.9rem;
+    }
+    
+    .log-content p {
+        margin: 5px 0;
+    }
+</style>
+{% endblock %}

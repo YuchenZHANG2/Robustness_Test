@@ -1,0 +1,369 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="step-container">
+    <h2>Test Results</h2>
+    <p class="step-description">Robustness evaluation results across all models and corruptions.</p>
+    
+    <div class="section">
+        <h3>Summary: mAP Comparison</h3>
+        <div class="results-table-container">
+            <table class="results-table">
+                <thead>
+                    <tr>
+                        <th>Model</th>
+                        <th>Clean mAP</th>
+                        <th>Average Corrupted mAP</th>
+                        <th>Degradation</th>
+                        <th>Robustness Score</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for model_key, model_data in results.items() %}
+                    <tr>
+                        <td><strong>{{ model_data.name }}</strong></td>
+                        <td>{{ "%.3f"|format(model_data.clean.mAP) }}</td>
+                        <td>
+                            {% set corrupt_maps = [] %}
+                            {% for corruption, severities in model_data.corrupted.items() %}
+                                {% for severity, metrics in severities.items() %}
+                                    {% set _ = corrupt_maps.append(metrics.mAP) %}
+                                {% endfor %}
+                            {% endfor %}
+                            {{ "%.3f"|format(corrupt_maps|sum / corrupt_maps|length) if corrupt_maps else "N/A" }}
+                        </td>
+                        <td>
+                            {% if corrupt_maps %}
+                                {% set avg_corrupt = corrupt_maps|sum / corrupt_maps|length %}
+                                {% set degradation = model_data.clean.mAP - avg_corrupt %}
+                                <span class="degradation">{{ "%.3f"|format(degradation) }}</span>
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if corrupt_maps %}
+                                {% set avg_corrupt = corrupt_maps|sum / corrupt_maps|length %}
+                                {% set robustness = (avg_corrupt / model_data.clean.mAP * 100) if model_data.clean.mAP > 0 else 0 %}
+                                <span class="robustness-score">{{ "%.1f"|format(robustness) }}%</span>
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="calculation-explanation">
+            <p><strong>Calculation Notes:</strong></p>
+            <ul>
+                <li><strong>Average Corrupted mAP:</strong> Mean of mAP across all corruptions and severity levels (1-5)</li>
+                <li><strong>Degradation:</strong> Clean mAP - Average Corrupted mAP (lower is better)</li>
+                <li><strong>Robustness Score:</strong> (Average Corrupted mAP / Clean mAP) × 100% (higher is better, 100% = no degradation)</li>
+            </ul>
+        </div>
+    </div>
+    
+    <div class="section">
+        <h3>Detailed Results by Corruption</h3>
+        <p class="help-text">Each plot shows mAP degradation across severity levels (0-5) for different models. Severity 0 represents clean (uncorrupted) images.</p>
+        
+        <div class="plots-container" id="plots-container">
+            <!-- Charts will be inserted here -->
+        </div>
+    </div>
+    
+    <div class="button-group">
+        <a href="{{ url_for('step1') }}" class="btn btn-primary">Start New Test</a>
+        <button onclick="downloadResults()" class="btn btn-info">Download Detailed Results (JSON)</button>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+    const plotData = {{ plot_data|safe }};
+    
+    // Color palette for different models
+    const colors = [
+        'rgb(102, 126, 234)',  // Purple
+        'rgb(255, 99, 132)',   // Red
+        'rgb(75, 192, 192)',   // Teal
+        'rgb(255, 205, 86)',   // Yellow
+        'rgb(153, 102, 255)',  // Purple-2
+        'rgb(255, 159, 64)',   // Orange
+        'rgb(54, 162, 235)',   // Blue
+    ];
+    
+    function createPlot(corruption, data, index) {
+        const container = document.getElementById('plots-container');
+        
+        // Create canvas wrapper
+        const wrapper = document.createElement('div');
+        wrapper.className = 'plot-wrapper';
+        
+        const title = document.createElement('h4');
+        title.className = 'plot-title';
+        title.textContent = corruption.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        wrapper.appendChild(title);
+        
+        const canvas = document.createElement('canvas');
+        canvas.id = `chart-${corruption}`;
+        wrapper.appendChild(canvas);
+        
+        container.appendChild(wrapper);
+        
+        // Create chart
+        const datasets = data.datasets.map((dataset, idx) => ({
+            label: dataset.label,
+            data: dataset.data,
+            borderColor: colors[idx % colors.length],
+            backgroundColor: colors[idx % colors.length].replace('rgb', 'rgba').replace(')', ', 0.1)'),
+            borderWidth: 3,
+            pointRadius: 5,
+            pointHoverRadius: 7,
+            tension: 0.2,
+            spanGaps: false
+        }));
+        
+        new Chart(canvas, {
+            type: 'line',
+            data: {
+                labels: data.labels,
+                datasets: datasets
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                aspectRatio: 2,
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top',
+                    },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false,
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.dataset.label || '';
+                                if (label) {
+                                    label += ': ';
+                                }
+                                if (context.parsed.y !== null) {
+                                    label += context.parsed.y.toFixed(3);
+                                }
+                                return label;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Severity Level',
+                            font: {
+                                size: 14,
+                                weight: 'bold'
+                            }
+                        },
+                        grid: {
+                            display: true,
+                            color: 'rgba(0, 0, 0, 0.05)'
+                        }
+                    },
+                    y: {
+                        title: {
+                            display: true,
+                            text: 'mAP',
+                            font: {
+                                size: 14,
+                                weight: 'bold'
+                            }
+                        },
+                        beginAtZero: true,
+                        max: 1.0,
+                        grid: {
+                            display: true,
+                            color: 'rgba(0, 0, 0, 0.05)'
+                        }
+                    }
+                },
+                interaction: {
+                    mode: 'nearest',
+                    axis: 'x',
+                    intersect: false
+                }
+            }
+        });
+    }
+    
+    // Create all plots
+    Object.keys(plotData).forEach((corruption, index) => {
+        createPlot(corruption, plotData[corruption], index);
+    });
+    
+    function downloadResults() {
+        window.location.href = '/static/test_results.json';
+    }
+</script>
+
+<style>
+    .results-table-container {
+        overflow-x: auto;
+        margin: 20px 0;
+    }
+    
+    .results-table {
+        width: 100%;
+        border-collapse: collapse;
+        background: white;
+    }
+    
+    .results-table th,
+    .results-table td {
+        padding: 12px;
+        text-align: left;
+        border-bottom: 1px solid #ddd;
+    }
+    
+    .results-table th {
+        background: #667eea;
+        color: white;
+        font-weight: bold;
+    }
+    
+    .results-table tbody tr:hover {
+        background: #f0f4ff;
+    }
+    
+    .degradation {
+        color: #ff5252;
+        font-weight: bold;
+    }
+    
+    .robustness-score {
+        color: #4caf50;
+        font-weight: bold;
+    }
+    
+    .model-results {
+        margin: 30px 0;
+        padding: 20px;
+        background: white;
+        border-radius: 8px;
+        border: 2px solid #667eea;
+    }
+    
+    .model-results h4 {
+        color: #667eea;
+        margin-bottom: 20px;
+        font-size: 1.3rem;
+    }
+    
+    .corruption-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 15px;
+    }
+    
+    .corruption-card {
+        background: #f8f9fa;
+        border-radius: 6px;
+        padding: 15px;
+        border: 1px solid #ddd;
+    }
+    
+    .corruption-card h5 {
+        color: #444;
+        margin-bottom: 10px;
+        text-align: center;
+    }
+    
+    .severity-table {
+        width: 100%;
+        font-size: 0.9rem;
+        border-collapse: collapse;
+    }
+    
+    .severity-table th,
+    .severity-table td {
+        padding: 8px 4px;
+        text-align: center;
+        border-bottom: 1px solid #ddd;
+        font-size: 0.85rem;
+    }
+    
+    .severity-table th {
+        background: #e0e0e0;
+        font-weight: bold;
+    }
+    
+    .severity-table tbody tr:hover {
+        background: #f0f0f0;
+    }
+    
+    .calculation-explanation {
+        background: #f0f4ff;
+        border-left: 4px solid #667eea;
+        padding: 15px 20px;
+        margin-top: 15px;
+        border-radius: 4px;
+    }
+    
+    .calculation-explanation p {
+        margin-bottom: 10px;
+        color: #667eea;
+        font-weight: 600;
+    }
+    
+    .calculation-explanation ul {
+        margin: 0;
+        padding-left: 20px;
+    }
+    
+    .calculation-explanation li {
+        color: #555;
+        font-size: 0.9rem;
+        margin-bottom: 5px;
+        line-height: 1.5;
+    }
+    
+    .calculation-explanation li strong {
+        color: #333;
+    }
+    
+    .plots-container {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+        gap: 30px;
+        margin: 20px 0;
+    }
+    
+    .plot-wrapper {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        border: 2px solid #e0e0e0;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+    
+    .plot-title {
+        color: #667eea;
+        font-size: 1.1rem;
+        margin-bottom: 15px;
+        text-align: center;
+        font-weight: 600;
+    }
+    
+    @media (max-width: 768px) {
+        .plots-container {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}

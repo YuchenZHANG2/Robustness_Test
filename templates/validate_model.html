@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="step-container">
+    <h2>Model Validation ({{ current }}/{{ total }})</h2>
+    <p class="step-description">Please verify that {{ model_name }} is detecting objects correctly before proceeding with the full test.</p>
+    
+    <div class="section">
+        <div id="loading-section">
+            <div class="loader"></div>
+            <p class="loading-text">Loading {{ model_name }}...</p>
+            <div class="progress-container">
+                <div class="progress-bar-fill" id="load-progress"></div>
+            </div>
+        </div>
+        
+        <div id="prediction-section" style="display: none;">
+            <h3>Sample Prediction</h3>
+            <p class="help-text">Please check if the object classes and bounding boxes look correct.</p>
+            
+            <div class="prediction-image-container">
+                <img id="prediction-image" src="" alt="Prediction Visualization" class="validation-image">
+            </div>
+            
+            <div class="detection-info">
+                <p><strong>Number of detections:</strong> <span id="num-detections">-</span></p>
+            </div>
+            
+            <div class="button-group">
+                <button onclick="rejectModel()" class="btn btn-secondary">Go Back to Model Selection</button>
+                <button onclick="approveModel()" class="btn btn-success btn-large">✓ Looks Good - Continue</button>
+            </div>
+        </div>
+        
+        <div id="error-section" style="display: none;">
+            <div class="error-message">
+                <h3>Error Loading Model</h3>
+                <p id="error-text"></p>
+                <button onclick="location.reload()" class="btn btn-primary">Retry</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const modelKey = "{{ model_key }}";
+    
+    // Load model and get prediction
+    window.onload = function() {
+        fetch(`/load_and_predict/${modelKey}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Show prediction
+                    document.getElementById('prediction-image').src = data.image;
+                    document.getElementById('num-detections').textContent = data.num_detections;
+                    document.getElementById('loading-section').style.display = 'none';
+                    document.getElementById('prediction-section').style.display = 'block';
+                } else {
+                    // Show error
+                    document.getElementById('error-text').textContent = data.error;
+                    document.getElementById('loading-section').style.display = 'none';
+                    document.getElementById('error-section').style.display = 'block';
+                }
+            })
+            .catch(error => {
+                document.getElementById('error-text').textContent = error.toString();
+                document.getElementById('loading-section').style.display = 'none';
+                document.getElementById('error-section').style.display = 'block';
+            });
+    };
+    
+    function approveModel() {
+        fetch(`/approve_model/${modelKey}`, {method: 'POST'})
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    window.location.href = '/validate_model';
+                }
+            });
+    }
+    
+    function rejectModel() {
+        if (confirm('Are you sure you want to go back and reselect models?')) {
+            window.location.href = '/step1';
+        }
+    }
+</script>
+
+<style>
+    .loader {
+        border: 8px solid #f3f3f3;
+        border-top: 8px solid #667eea;
+        border-radius: 50%;
+        width: 60px;
+        height: 60px;
+        animation: spin 1s linear infinite;
+        margin: 20px auto;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    .loading-text {
+        text-align: center;
+        font-size: 1.2rem;
+        color: #667eea;
+        margin: 20px 0;
+    }
+    
+    .progress-container {
+        width: 100%;
+        height: 30px;
+        background: #e0e0e0;
+        border-radius: 15px;
+        overflow: hidden;
+        margin: 20px 0;
+    }
+    
+    .progress-bar-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #667eea, #764ba2);
+        width: 0%;
+        transition: width 0.3s ease;
+        animation: progress 2s ease-in-out infinite;
+    }
+    
+    @keyframes progress {
+        0%, 100% { width: 10%; }
+        50% { width: 90%; }
+    }
+    
+    .prediction-image-container {
+        text-align: center;
+        margin: 20px 0;
+    }
+    
+    .validation-image {
+        max-width: 100%;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+    
+    .detection-info {
+        background: #f0f4ff;
+        padding: 15px;
+        border-radius: 6px;
+        margin: 20px 0;
+        text-align: center;
+    }
+    
+    .error-message {
+        background: #ffebee;
+        border: 2px solid #ef5350;
+        border-radius: 8px;
+        padding: 30px;
+        text-align: center;
+    }
+    
+    .error-message h3 {
+        color: #c62828;
+        margin-bottom: 15px;
+    }
+</style>
+{% endblock %}

@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="step-container">
+    <h2>Test Results</h2>
+    <p class="step-description">Processing your configuration...</p>
+    
+    <div class="section">
+        <h3>Configuration</h3>
+        <pre>{{ config | tojson(indent=2) }}</pre>
+        
+        <p class="text-info">Results will be displayed here after implementation.</p>
+    </div>
+    
+    <div class="button-group">
+        <a href="{{ url_for('step1') }}" class="btn btn-primary">Start New Test</a>
+    </div>
+</div>
+{% endblock %}

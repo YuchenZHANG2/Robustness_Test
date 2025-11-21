@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block progress %}
+<div class="progress-bar">
+    <div class="progress-step completed">1/3</div>
+    <div class="progress-step completed">2/3</div>
+    <div class="progress-step active">3/3</div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="step-container">
+    <h2>Step 3: Report Options</h2>
+    <p class="step-description">Review your selections and choose how you want to receive the results.</p>
+    
+    <div class="section summary-section">
+        <h3>Configuration Summary</h3>
+        
+        <div class="summary-item">
+            <strong>Selected Detectors:</strong>
+            <ul>
+                {% for detector in detectors %}
+                <li>{{ detector }}</li>
+                {% endfor %}
+                {% if custom_detector %}
+                <li>Custom Model: {{ custom_detector.split('/')[-1] }}</li>
+                {% endif %}
+                {% if not detectors and not custom_detector %}
+                <li class="text-warning">No detectors selected</li>
+                {% endif %}
+            </ul>
+        </div>
+        
+        <div class="summary-item">
+            <strong>Selected Corruptions:</strong>
+            <ul>
+                {% for corruption in corruptions %}
+                <li>{{ corruption.replace('_', ' ').title() }}</li>
+                {% endfor %}
+                {% if not corruptions %}
+                <li class="text-warning">No corruptions selected</li>
+                {% endif %}
+            </ul>
+        </div>
+    </div>
+    
+    <form method="POST">
+        <div class="section">
+            <h3>Report Format</h3>
+            <div class="radio-group">
+                <div class="radio-item">
+                    <input type="radio" id="report_visual" name="report_type" value="visual" checked>
+                    <label for="report_visual">
+                        <strong>Visual Report Only</strong>
+                        <p class="help-text">Display results with charts and metrics without interpretation</p>
+                    </label>
+                </div>
+                
+                <div class="radio-item">
+                    <input type="radio" id="report_pdf" name="report_type" value="pdf">
+                    <label for="report_pdf">
+                        <strong>PDF Report with Analysis</strong>
+                        <p class="help-text">Generate a comprehensive PDF report with AI-powered interpretation (requires vision-language model)</p>
+                    </label>
+                </div>
+            </div>
+        </div>
+        
+        <div class="button-group">
+            <button type="submit" name="action" value="back" class="btn btn-secondary">← Back</button>
+            <button type="submit" name="action" value="start" class="btn btn-success btn-large">Start Testing</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

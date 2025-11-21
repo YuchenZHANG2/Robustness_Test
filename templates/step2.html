@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block progress %}
+<div class="progress-bar">
+    <div class="progress-step completed">1/3</div>
+    <div class="progress-step active">2/3</div>
+    <div class="progress-step">3/3</div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="step-container">
+    <h2>Step 2: Select Corruptions</h2>
+    <p class="step-description">Choose which corruption types to apply to your test images.</p>
+    
+    <form method="POST" id="corruption-form">
+        {% for category, corruption_list in corruptions.items() %}
+        <div class="section corruption-category">
+            <div class="category-header">
+                <h3>{{ category }}
+                    <button type="button" class="btn-category select-all" data-category="{{ category }}">Select All</button>
+                    <button type="button" class="btn-category deselect-all" data-category="{{ category }}">Deselect All</button>
+                </h3>
+            </div>
+            
+            <div class="checkbox-grid">
+                {% for corruption in corruption_list %}
+                <div class="checkbox-item">
+                    <input type="checkbox" 
+                           id="{{ corruption }}" 
+                           name="{{ corruption }}" 
+                           value="{{ corruption }}"
+                           class="corruption-checkbox category-{{ category }}"
+                           {% if selected_corruptions and corruption in selected_corruptions %}checked{% endif %}>
+                    <label for="{{ corruption }}">{{ corruption.replace('_', ' ').title() }}</label>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+        
+        {% if show_preview %}
+        <div class="section preview-section">
+            <h3>Corruption Preview</h3>
+            <div id="preview-container">
+                <img src="{{ url_for('static', filename='previews/corruption_preview.png') }}" 
+                     alt="Corruption Preview" 
+                     class="preview-image">
+            </div>
+        </div>
+        {% endif %}
+        
+        <div class="button-group">
+            <button type="submit" name="action" value="back" class="btn btn-secondary">← Back</button>
+            <button type="submit" name="action" value="preview" class="btn btn-info">Preview Corruptions</button>
+            <button type="submit" name="action" value="next" class="btn btn-primary">Next →</button>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Select All / Deselect All functionality
+    document.querySelectorAll('.select-all').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const category = this.dataset.category;
+            document.querySelectorAll(`.category-${category}`).forEach(checkbox => {
+                checkbox.checked = true;
+            });
+        });
+    });
+    
+    document.querySelectorAll('.deselect-all').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const category = this.dataset.category;
+            document.querySelectorAll(`.category-${category}`).forEach(checkbox => {
+                checkbox.checked = false;
+            });
+        });
+    });
+    
+    // Preview functionality - generate preview when clicking preview button
+    {% if show_preview %}
+    // Trigger preview generation
+    fetch('/preview_corruption')
+        .then(response => response.json())
+        .then(data => {
+            if (data.preview_url) {
+                document.querySelector('.preview-image').src = data.preview_url + '?t=' + new Date().getTime();
+            }
+        })
+        .catch(error => console.error('Error generating preview:', error));
+    {% endif %}
+</script>
+{% endblock %}

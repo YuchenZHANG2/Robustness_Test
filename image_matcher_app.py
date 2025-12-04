@@ -7,11 +7,12 @@ import io
 from PIL import Image
 import json
 import os
+import shutil
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = Path('uploads/temp')
 app.config['OUTPUT_FOLDER'] = Path('matched_crops')
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
+app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 500MB max file size
 
 # Ensure directories exist
 app.config['UPLOAD_FOLDER'].mkdir(parents=True, exist_ok=True)
@@ -202,13 +203,24 @@ def set_folders():
 @app.route('/upload_folders', methods=['POST'])
 def upload_folders():
     """Handle folder uploads from browser."""
+    print("\n" + "="*60)
+    print("UPLOAD FOLDERS ENDPOINT CALLED")
+    print("="*60)
+    
+    print(f"Request files keys: {list(request.files.keys())}")
+    
     if 'folder1_files' not in request.files or 'folder2_files' not in request.files:
+        print("ERROR: Missing folder files in request")
         return jsonify({'error': 'Both folders must be uploaded'}), 400
     
     folder1_files = request.files.getlist('folder1_files')
     folder2_files = request.files.getlist('folder2_files')
     
+    print(f"Folder 1 files count: {len(folder1_files)}")
+    print(f"Folder 2 files count: {len(folder2_files)}")
+    
     if not folder1_files or not folder2_files:
+        print("ERROR: One or both folders are empty")
         return jsonify({'error': 'Both folders must contain files'}), 400
     
     try:
@@ -216,11 +228,15 @@ def upload_folders():
         upload_dir1 = app.config['UPLOAD_FOLDER'] / 'folder1'
         upload_dir2 = app.config['UPLOAD_FOLDER'] / 'folder2'
         
+        print(f"Upload dir 1: {upload_dir1}")
+        print(f"Upload dir 2: {upload_dir2}")
+        
         # Clear existing files
-        import shutil
         if upload_dir1.exists():
+            print(f"Removing existing folder1 directory")
             shutil.rmtree(upload_dir1)
         if upload_dir2.exists():
+            print(f"Removing existing folder2 directory")
             shutil.rmtree(upload_dir2)
         
         upload_dir1.mkdir(parents=True, exist_ok=True)
@@ -229,26 +245,45 @@ def upload_folders():
         # Save uploaded files
         image_extensions = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif'}
         
+        saved_count1 = 0
         for file in folder1_files:
             if file.filename and Path(file.filename).suffix.lower() in image_extensions:
                 filename = Path(file.filename).name
-                file.save(upload_dir1 / filename)
+                filepath = upload_dir1 / filename
+                file.save(str(filepath))
+                saved_count1 += 1
+                print(f"  Saved to folder1: {filename}")
         
+        print(f"Total files saved to folder1: {saved_count1}")
+        
+        saved_count2 = 0
         for file in folder2_files:
             if file.filename and Path(file.filename).suffix.lower() in image_extensions:
                 filename = Path(file.filename).name
-                file.save(upload_dir2 / filename)
+                filepath = upload_dir2 / filename
+                file.save(str(filepath))
+                saved_count2 += 1
+                print(f"  Saved to folder2: {filename}")
+        
+        print(f"Total files saved to folder2: {saved_count2}")
         
         # Find matching pairs
+        print("Finding matching pairs...")
         pairs = find_matching_pairs(upload_dir1, upload_dir2)
         
+        print(f"Found {len(pairs)} matching pairs")
+        
         if not pairs:
+            print("ERROR: No matching pairs found")
             return jsonify({'error': 'No matching image pairs found in the uploaded folders'}), 400
         
         session_data['folder1_path'] = str(upload_dir1)
         session_data['folder2_path'] = str(upload_dir2)
         session_data['image_pairs'] = pairs
         session_data['current_pair_index'] = 0
+        
+        print("SUCCESS: Returning response")
+        print("="*60 + "\n")
         
         return jsonify({
             'success': True,
@@ -258,6 +293,9 @@ def upload_folders():
         })
     
     except Exception as e:
+        print(f"EXCEPTION: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 

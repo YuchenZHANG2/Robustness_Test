@@ -199,6 +199,68 @@ def set_folders():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/upload_folders', methods=['POST'])
+def upload_folders():
+    """Handle folder uploads from browser."""
+    if 'folder1_files' not in request.files or 'folder2_files' not in request.files:
+        return jsonify({'error': 'Both folders must be uploaded'}), 400
+    
+    folder1_files = request.files.getlist('folder1_files')
+    folder2_files = request.files.getlist('folder2_files')
+    
+    if not folder1_files or not folder2_files:
+        return jsonify({'error': 'Both folders must contain files'}), 400
+    
+    try:
+        # Create temporary directories for uploaded files
+        upload_dir1 = app.config['UPLOAD_FOLDER'] / 'folder1'
+        upload_dir2 = app.config['UPLOAD_FOLDER'] / 'folder2'
+        
+        # Clear existing files
+        import shutil
+        if upload_dir1.exists():
+            shutil.rmtree(upload_dir1)
+        if upload_dir2.exists():
+            shutil.rmtree(upload_dir2)
+        
+        upload_dir1.mkdir(parents=True, exist_ok=True)
+        upload_dir2.mkdir(parents=True, exist_ok=True)
+        
+        # Save uploaded files
+        image_extensions = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif'}
+        
+        for file in folder1_files:
+            if file.filename and Path(file.filename).suffix.lower() in image_extensions:
+                filename = Path(file.filename).name
+                file.save(upload_dir1 / filename)
+        
+        for file in folder2_files:
+            if file.filename and Path(file.filename).suffix.lower() in image_extensions:
+                filename = Path(file.filename).name
+                file.save(upload_dir2 / filename)
+        
+        # Find matching pairs
+        pairs = find_matching_pairs(upload_dir1, upload_dir2)
+        
+        if not pairs:
+            return jsonify({'error': 'No matching image pairs found in the uploaded folders'}), 400
+        
+        session_data['folder1_path'] = str(upload_dir1)
+        session_data['folder2_path'] = str(upload_dir2)
+        session_data['image_pairs'] = pairs
+        session_data['current_pair_index'] = 0
+        
+        return jsonify({
+            'success': True,
+            'num_pairs': len(pairs),
+            'pairs': [p['name'] for p in pairs],
+            'current_pair': pairs[0]['name']
+        })
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/get_current_pair', methods=['GET'])
 def get_current_pair():
     """Get information about the current pair."""

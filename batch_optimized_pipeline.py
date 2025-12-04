@@ -22,57 +22,35 @@ from torch_corruptions import TorchCorruptions
 
 
 class COCODetectionDataset(Dataset):
-    """Dataset for loading COCO images with optional corruption."""
+    """Dataset for loading COCO images (corruption applied later in batch)."""
     
-    def __init__(self, evaluator, image_ids, corruption_name=None, severity=None):
+    def __init__(self, evaluator, image_ids):
         """
         Initialize dataset.
         
         Args:
             evaluator: COCOEvaluator instance
             image_ids: List of COCO image IDs
-            corruption_name: Optional corruption to apply
-            severity: Optional corruption severity (1-5)
         """
         self.evaluator = evaluator
         self.image_ids = image_ids
-        self.corruption_name = corruption_name
-        self.severity = severity
-        
-        # Use CPU-based corruptor to avoid CUDA fork issues in workers
-        if corruption_name:
-            self.corruptor = TorchCorruptions(device='cpu')
-        else:
-            self.corruptor = None
-        
+    
     def __len__(self):
         return len(self.image_ids)
     
     def __getitem__(self, idx):
         image_id = self.image_ids[idx]
         
-        # Load image
+        # Load image only - corruption happens in batch on GPU
         img_path = self.evaluator.get_image_path(image_id)
         image = Image.open(img_path).convert('RGB')
         original_size = image.size  # (width, height)
-        
-        # Apply corruption on CPU in worker process (avoids CUDA fork issue)
-        if self.corruption_name and self.corruptor:
-            image_np = np.array(image)
-            image_np = self.corruptor.corrupt(
-                image_np, 
-                corruption_name=self.corruption_name,
-                severity=self.severity
-            )
-            image = Image.fromarray(image_np)
         
         return {
             'image': image,
             'image_id': image_id,
             'original_size': original_size
         }
-
-
 def collate_fn(batch):
     """Custom collate function that keeps images as PIL for model input."""
     return {
@@ -104,11 +82,48 @@ class BatchOptimizedRobustnessTest:
         self.num_workers = num_workers
         self.results = {}
         
-        # GPU is used only for model inference (not in workers)
+        # GPU is used for both corruption and model inference
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        print(f"BatchOptimizedRobustnessTest: Using {self.device} for model inference")
+        self.corruptor = TorchCorruptions(device=self.device)
+        
+        print(f"BatchOptimizedRobustnessTest: Using {self.device}")
         print(f"Batch size: {batch_size}, Workers: {num_workers}")
-        print(f"Corruptions: CPU (in workers), Model: {self.device}")
+        print(f"GPU batch processing: Corruptions + Model inference")
+    
+    def apply_batch_corruption(self, images: List[Image.Image], 
+                               corruption_name: str, severity: int) -> List[Image.Image]:
+        """
+        Apply corruption to a batch of images on GPU.
+        
+        Args:
+            images: List of PIL Images
+            corruption_name: Name of corruption to apply
+            severity: Severity level (1-5)
+        
+        Returns:
+            List of corrupted PIL Images
+        """
+        from torchvision import transforms
+        
+        # Convert batch to tensor (B, C, H, W)
+        tensors = torch.stack([transforms.ToTensor()(img) for img in images])
+        tensors = tensors.to(self.device)
+        
+        # Apply corruption to entire batch at once
+        corrupted_tensors = self.corruptor.corrupt(
+            tensors,
+            corruption_name=corruption_name,
+            severity=severity,
+            return_tensor=True
+        )
+        
+        # Convert back to PIL images
+        corrupted_images = []
+        for i in range(corrupted_tensors.shape[0]):
+            img = self.corruptor.to_pil(corrupted_tensors[i])
+            corrupted_images.append(img)
+        
+        return corrupted_images
     
     def predict_batch_torchvision(self, model, images: List[Image.Image], 
                                    score_threshold: float = 0.05) -> List[Dict]:
@@ -250,13 +265,8 @@ class BatchOptimizedRobustnessTest:
         Returns:
             Dictionary with predictions and metrics
         """
-        # Create dataset (corruptions happen on CPU in workers)
-        dataset = COCODetectionDataset(
-            self.evaluator, 
-            image_ids,
-            corruption_name=corruption_name,
-            severity=severity
-        )
+        # Create dataset (just loads images)
+        dataset = COCODetectionDataset(self.evaluator, image_ids)
         
         # Create DataLoader with multiple workers for parallel loading
         dataloader = DataLoader(
@@ -285,10 +295,15 @@ class BatchOptimizedRobustnessTest:
                     f"Processing batch {batch_idx + 1}/{total_batches}{msg_suffix}"
                 )
             
+            # Apply corruption to entire batch on GPU if needed
+            images = batch['images']
+            if corruption_name:
+                images = self.apply_batch_corruption(images, corruption_name, severity)
+            
             # Batch prediction
             batch_preds = self.predict_batch(
                 model_key, 
-                batch['images'],
+                images,
                 score_threshold=0.05
             )
             

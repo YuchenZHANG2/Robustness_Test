@@ -80,7 +80,12 @@ class TorchCorruptions:
             Tensor of shape (B,C,H,W) normalized to [0,1]
         """
         if isinstance(images, Image.Image):
-            images = np.array(images)
+            # Direct PIL to tensor conversion
+            from torchvision import transforms
+            images = transforms.ToTensor()(images)
+            # ToTensor returns (C,H,W) in [0,1], so add batch dimension
+            images = images.unsqueeze(0)
+            return images.to(self.device)
         
         if isinstance(images, np.ndarray):
             images = torch.from_numpy(images).float()
@@ -124,6 +129,20 @@ class TorchCorruptions:
             array = array[0]
         
         return array
+    
+    def to_pil(self, tensor):
+        """
+        Convert tensor to PIL Image.
+        
+        Args:
+            tensor: Tensor of shape (C,H,W) in range [0,1]
+        
+        Returns:
+            PIL Image
+        """
+        from torchvision import transforms
+        # Convert single image tensor (C,H,W) to PIL
+        return transforms.ToPILImage()(tensor.cpu())
     
     # ============ Noise Corruptions ============
     
@@ -543,28 +562,38 @@ class TorchCorruptions:
     
     # ============ Main API ============
     
-    def corrupt(self, images, corruption_name, severity=1):
+    def corrupt(self, images, corruption_name, severity=1, return_tensor=False):
         """
         Apply corruption to a batch of images.
         
         Args:
-            images: Batch of images as numpy array (B,H,W,C) or (H,W,C), or PIL Image
+            images: Batch of images as numpy array (B,H,W,C) or (H,W,C), PIL Image, or torch.Tensor
             corruption_name: Name of the corruption to apply
             severity: Severity level (1-5)
+            return_tensor: If True, return tensor (C,H,W) instead of numpy array
         
         Returns:
-            Corrupted images as numpy array in same format as input
+            Corrupted images as numpy array (default) or tensor if return_tensor=True
         """
-        # Store original shape to determine output format
-        if isinstance(images, Image.Image):
-            original_shape = np.array(images).shape
-        elif isinstance(images, np.ndarray):
-            original_shape = images.shape
+        # Check if input is already a tensor
+        if isinstance(images, torch.Tensor):
+            x = images.to(self.device)
+            if x.ndim == 3:
+                x = x.unsqueeze(0)
+            input_was_tensor = True
+            original_shape = None
         else:
-            original_shape = images.shape
-        
-        # Convert to tensor
-        x = self.to_tensor(images)
+            # Store original shape to determine output format
+            if isinstance(images, Image.Image):
+                original_shape = np.array(images).shape
+            elif isinstance(images, np.ndarray):
+                original_shape = images.shape
+            else:
+                original_shape = images.shape
+            
+            # Convert to tensor
+            x = self.to_tensor(images)
+            input_was_tensor = False
         
         # Apply corruption
         corruption_fn = getattr(self, corruption_name, None)
@@ -573,10 +602,16 @@ class TorchCorruptions:
         
         corrupted = corruption_fn(x, severity)
         
-        # Convert back to numpy
-        result = self.to_numpy(corrupted, original_shape)
-        
-        return result
+        # Return in requested format
+        if return_tensor or input_was_tensor:
+            # Return as tensor (B,C,H,W) or (C,H,W) if single image
+            if corrupted.shape[0] == 1:
+                return corrupted.squeeze(0)
+            return corrupted
+        else:
+            # Convert back to numpy
+            result = self.to_numpy(corrupted, original_shape)
+            return result
     
     def corrupt_batch(self, images, corruption_names, severities):
         """

@@ -317,27 +317,33 @@ class TorchCorruptions:
     # ============ Weather Corruptions ============
     
     def fog(self, x, severity=1):
-        """Apply fog effect using Perlin-like noise."""
+        """Apply fog effect using atmospheric scattering."""
         c = [(1.5, 2), (2., 2), (2.5, 1.7), (2.5, 1.5), (3., 1.4)][severity - 1]
         
-        # Generate simple fog pattern using multiple frequencies
         B, C, H, W = x.shape
         
-        # Create random fog pattern (simplified - not true plasma fractal)
-        fog = torch.zeros((B, 1, H, W), device=self.device)
+        # Create fog layer (uniform gray)
+        fog_color = 0.7  # Gray fog
+        
+        # Generate depth-like pattern for fog density variation
+        fog_density = torch.zeros((B, 1, H, W), device=self.device)
         
         for scale in [1, 2, 4, 8]:
-            h_scale = H // scale
-            w_scale = W // scale
+            h_scale = max(1, H // scale)
+            w_scale = max(1, W // scale)
             noise = torch.rand((B, 1, h_scale, w_scale), device=self.device)
             noise = F.interpolate(noise, size=(H, W), mode='bilinear', align_corners=False)
-            fog += noise / scale
+            fog_density += noise / scale
         
-        fog = fog / fog.max() * c[0]
+        # Normalize fog density
+        fog_density = fog_density / fog_density.max()
         
-        max_val = x.max()
-        result = x + fog
-        result = result * max_val / (max_val + c[0])
+        # Apply fog using atmospheric scattering formula: result = x * (1 - alpha) + fog_color * alpha
+        # where alpha depends on severity and fog_density
+        alpha = fog_density * (severity / c[1])  # Adjust alpha based on severity
+        alpha = torch.clamp(alpha, 0, 0.85)  # Limit max fog
+        
+        result = x * (1 - alpha) + fog_color * alpha
         
         return torch.clamp(result, 0, 1)
     
@@ -377,36 +383,56 @@ class TorchCorruptions:
         return torch.clamp(result, 0, 1)
     
     def frost(self, x, severity=1):
-        """Apply frost effect using preloaded textures."""
+        """Apply frost effect using preloaded textures or procedural generation."""
         c = [(1, 0.4), (0.8, 0.6), (0.7, 0.7), (0.65, 0.7), (0.6, 0.75)][severity - 1]
-        
-        if self.frost_images is None:
-            # Fallback to fog if frost images not available
-            return self.fog(x, severity)
         
         B, C, H, W = x.shape
         
-        # Pick random frost texture
-        idx = torch.randint(len(self.frost_images), (1,)).item()
-        frost = self.frost_images[idx]
+        if self.frost_images is not None and len(self.frost_images) > 0:
+            # Use frost texture
+            idx = torch.randint(len(self.frost_images), (1,)).item()
+            frost = self.frost_images[idx]
+            
+            # Resize frost to match image size (with some scaling)
+            frost_h, frost_w = frost.shape[0], frost.shape[1]
+            scale = max(H / frost_h, W / frost_w) * 1.1
+            
+            new_h, new_w = int(frost_h * scale), int(frost_w * scale)
+            frost = frost.permute(2, 0, 1).unsqueeze(0)  # (1, C, H, W)
+            frost = F.interpolate(frost, size=(new_h, new_w), mode='bilinear', align_corners=False)
+            
+            # Random crop
+            start_h = torch.randint(0, max(1, new_h - H), (1,)).item()
+            start_w = torch.randint(0, max(1, new_w - W), (1,)).item()
+            frost = frost[:, :, start_h:start_h+H, start_w:start_w+W]
+            
+            # Expand to batch size
+            frost = frost.repeat(B, 1, 1, 1)
+        else:
+            # Generate procedural frost pattern
+            # Create crystalline pattern using multiple noise scales
+            frost_pattern = torch.zeros((B, 1, H, W), device=self.device)
+            
+            for scale in [1, 2, 4, 8, 16]:
+                h_scale = max(1, H // scale)
+                w_scale = max(1, W // scale)
+                noise = torch.rand((B, 1, h_scale, w_scale), device=self.device)
+                noise = F.interpolate(noise, size=(H, W), mode='bilinear', align_corners=False)
+                frost_pattern += noise / scale * 0.3
+            
+            # Normalize and enhance contrast for crystalline effect
+            frost_pattern = frost_pattern / frost_pattern.max()
+            frost_pattern = torch.pow(frost_pattern, 0.7)  # Enhance bright areas
+            frost_pattern = frost_pattern * 0.9 + 0.1  # Shift to lighter values
+            
+            # Make it slightly blue-ish (create 3-channel frost)
+            frost = torch.zeros((B, 3, H, W), device=self.device)
+            frost[:, 0:1] = frost_pattern * 0.95  # R
+            frost[:, 1:2] = frost_pattern * 0.98  # G  
+            frost[:, 2:3] = frost_pattern * 1.0   # B (slightly more blue)
         
-        # Resize frost to match image size (with some scaling)
-        frost_h, frost_w = frost.shape[0], frost.shape[1]
-        scale = max(H / frost_h, W / frost_w) * 1.1
-        
-        new_h, new_w = int(frost_h * scale), int(frost_w * scale)
-        frost = frost.permute(2, 0, 1).unsqueeze(0)  # (1, C, H, W)
-        frost = F.interpolate(frost, size=(new_h, new_w), mode='bilinear', align_corners=False)
-        
-        # Random crop
-        start_h = torch.randint(0, max(1, new_h - H), (1,)).item()
-        start_w = torch.randint(0, max(1, new_w - W), (1,)).item()
-        frost = frost[:, :, start_h:start_h+H, start_w:start_w+W]
-        
-        # Expand to batch size
-        frost = frost.repeat(B, 1, 1, 1)
-        
-        # Blend
+        # Blend using screen mode for frost overlay
+        # result = image * (1 - alpha) + frost * alpha
         result = c[0] * x + c[1] * frost
         
         return torch.clamp(result, 0, 1)

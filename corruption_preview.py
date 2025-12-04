@@ -49,13 +49,15 @@ def generate_preview(corruption_names, severity=3, output_dir='static/previews')
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     corruptor = TorchCorruptions(device=device)
     
-    # Load showcase image
-    showcase_path = Path('showcase.png')
-    if not showcase_path.exists():
-        # Create a simple placeholder if showcase.png doesn't exist
-        create_placeholder_image(showcase_path)
+    # Load preview image
+    preview_path = Path('preview.jpg')
+    if not preview_path.exists():
+        # Fallback to showcase.png or create placeholder
+        preview_path = Path('showcase.png')
+        if not preview_path.exists():
+            create_placeholder_image(preview_path)
     
-    image = np.array(Image.open(showcase_path).convert('RGB'))
+    image = np.array(Image.open(preview_path).convert('RGB'))
     
     # Calculate grid dimensions
     num_corruptions = len(corruption_names)

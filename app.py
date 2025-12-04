@@ -11,8 +11,6 @@ import time
 from model_loader import ModelLoader, MODEL_CONFIGS
 from evaluator import COCOEvaluator, format_coco_label_mapping
 from visualization import visualize_predictions, fig_to_base64
-from testing_pipeline import RobustnessTest
-from batch_testing_pipeline import BatchRobustnessTest
 from batch_optimized_pipeline import BatchOptimizedRobustnessTest
 import torch
 
@@ -279,27 +277,14 @@ def execute_test():
             test_progress['progress'] = 0
             test_progress['message'] = 'Initializing test...'
             
-            # Use optimized batch processing if GPU is available
-            use_gpu = torch.cuda.is_available()
-            
-            if use_gpu:
-                print("Using GPU-accelerated OPTIMIZED batch processing with DataLoader")
-                # Optimized version with parallel loading and batch inference
-                test = BatchOptimizedRobustnessTest(
-                    model_loader, 
-                    evaluator, 
-                    batch_size=4,  # Conservative for single GPU
-                    num_workers=2   # Parallel data loading
-                )
-            else:
-                print("Using CPU-based batch processing")
-                # Fallback to standard batch processing
-                test = BatchRobustnessTest(
-                    model_loader, 
-                    evaluator, 
-                    batch_size=4,
-                    device='cpu'
-                )
+            # Use optimized batch processing
+            print("Using optimized batch processing with DataLoader")
+            test = BatchOptimizedRobustnessTest(
+                model_loader, 
+                evaluator, 
+                batch_size=4,  # Conservative for single GPU
+                num_workers=2   # Parallel data loading
+            )
             
             # Progress callback
             def progress_callback(current, total, message):
@@ -322,10 +307,9 @@ def execute_test():
             # Save results
             test.save_results('static/test_results.json')
             
-            mode = "GPU-accelerated batch" if use_gpu else "CPU batch"
             test_progress['status'] = 'completed'
             test_progress['progress'] = 100
-            test_progress['message'] = f'Test completed using {mode} processing!'
+            test_progress['message'] = 'Test completed successfully!'
             test_progress['results_ready'] = True
             
         except Exception as e:

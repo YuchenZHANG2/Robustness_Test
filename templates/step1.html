@@ -46,10 +46,10 @@
 
 {% block scripts %}
 <script>
-    // Update file input label with selected filename
-    document.getElementById('custom_detector').addEventListener('change', function(e) {
-        const fileName = e.target.files[0]?.name || 'Choose a model file...';
-        document.querySelector('.file-text').textContent = fileName;
-    });
+const fileInput = document.getElementById('custom_detector');
+const fileText = document.querySelector('.file-text');
+fileInput.addEventListener('change', e => {
+    fileText.textContent = e.target.files[0]?.name || 'Choose a model file...';
+});
 </script>
 {% endblock %}

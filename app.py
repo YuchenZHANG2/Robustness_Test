@@ -1,18 +1,15 @@
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify
 import os
-from pathlib import Path
 from werkzeug.utils import secure_filename
-import random
 from PIL import Image
 import threading
-import time
+import torch
 
 # Import our custom modules
 from model_loader import ModelLoader, MODEL_CONFIGS
 from evaluator import COCOEvaluator, format_coco_label_mapping
 from visualization import visualize_predictions, fig_to_base64
 from batch_optimized_pipeline import BatchOptimizedRobustnessTest
-import torch
 
 # Global variable to track test progress
 test_progress = {
@@ -31,12 +28,10 @@ app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 16MB max file size
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs('static/validation', exist_ok=True)
 
-# Initialize model loader and evaluator
+# Initialize model loader
 model_loader = ModelLoader()
 
-# ============================================================================
-# DATASET SELECTION - Change SELECTED_DATASET to switch between datasets
-# ============================================================================
+# Dataset configurations
 DATASET_CONFIG = {
     'COCO': {
         'annotation_file': '/home/yuchen/YuchenZ/Datasets/coco/annotations/instances_val2017.json',
@@ -52,25 +47,8 @@ DATASET_CONFIG = {
     }
 }
 
-# >>> CHANGE THIS LINE TO SWITCH DATASETS <<<
-SELECTED_DATASET = 'Construction'  # Options: 'COCO' or 'Construction'
-# ============================================================================
-
-# Initialize with Construction dataset as default (will be overridden by user selection)
-dataset_config = DATASET_CONFIG[SELECTED_DATASET]
-evaluator = COCOEvaluator(
-    annotation_file=dataset_config['annotation_file'],
-    image_dir=dataset_config['image_dir'],
-    filter_classes=dataset_config['filter_classes'],
-    class_mapping=dataset_config['class_mapping']
-)
-
-print(f"Default dataset: {SELECTED_DATASET}")
-print(f"  (Will be overridden by user selection in the app)")
-if dataset_config['filter_classes']:
-    print(f"  Filtering to classes: {dataset_config['filter_classes']}")
-if dataset_config['class_mapping']:
-    print(f"  Class mapping: {dataset_config['class_mapping']}")
+# Global evaluator (will be set by user selection)
+evaluator = None
 
 # Predefined detector models
 # Maps display name -> (model_config_key, full_name)
@@ -89,6 +67,16 @@ CORRUPTIONS = {
     'Weather': ['snow', 'frost', 'fog', 'brightness'],
     'Digital': ['contrast', 'elastic_transform', 'pixelate', 'jpeg_compression']
 }
+
+
+def get_selected_corruptions(form_data):
+    """Extract selected corruptions from form data."""
+    selected = []
+    for category, corruption_list in CORRUPTIONS.items():
+        for corruption in corruption_list:
+            if form_data.get(corruption):
+                selected.append(corruption)
+    return selected
 
 
 @app.route('/')
@@ -127,34 +115,27 @@ def step2():
     """Step 2/3: Dataset and Corruption Selection"""
     if request.method == 'POST':
         action = request.form.get('action')
+        selected_dataset = request.form.get('dataset')
         
         if action == 'back':
             return redirect(url_for('step1'))
-        elif action == 'preview':
-            # Get selected dataset
-            selected_dataset = request.form.get('dataset')
-            
-            # Get selected corruptions for preview
-            selected_corruptions = []
-            for category, corruption_list in CORRUPTIONS.items():
-                for corruption in corruption_list:
-                    if request.form.get(corruption):
-                        selected_corruptions.append(corruption)
-            
-            session['selected_corruptions'] = selected_corruptions
-            # Return to same page to show preview
+        
+        # Collect selected corruptions
+        selected_corruptions = get_selected_corruptions(request.form)
+        session['selected_corruptions'] = selected_corruptions
+        
+        if action == 'preview':
             return render_template('step2.html', 
                                  corruptions=CORRUPTIONS,
                                  datasets=DATASET_CONFIG,
                                  selected_dataset=selected_dataset,
                                  selected_corruptions=selected_corruptions,
                                  show_preview=True)
+        
         elif action == 'next':
-            # Store selected dataset
-            selected_dataset = request.form.get('dataset')
+            # Store selected dataset and update evaluator
             session['selected_dataset'] = selected_dataset
             
-            # Update global evaluator based on selection
             global evaluator
             dataset_config = DATASET_CONFIG[selected_dataset]
             evaluator = COCOEvaluator(
@@ -163,18 +144,13 @@ def step2():
                 filter_classes=dataset_config['filter_classes'],
                 class_mapping=dataset_config['class_mapping']
             )
-            
-            # Store corruptions and move to next step
-            selected_corruptions = []
-            for category, corruption_list in CORRUPTIONS.items():
-                for corruption in corruption_list:
-                    if request.form.get(corruption):
-                        selected_corruptions.append(corruption)
-            
-            session['selected_corruptions'] = selected_corruptions
             return redirect(url_for('step3'))
     
-    return render_template('step2.html', corruptions=CORRUPTIONS, datasets=DATASET_CONFIG, show_preview=False)
+    return render_template('step2.html', 
+                         corruptions=CORRUPTIONS, 
+                         datasets=DATASET_CONFIG, 
+                         selected_dataset=None,
+                         show_preview=False)
 
 
 @app.route('/step3', methods=['GET', 'POST'])
@@ -250,12 +226,7 @@ def validate_model():
 def load_and_predict(model_key):
     """Load model and make prediction on sample image"""
     try:
-        # Load model with progress tracking
-        def progress_callback(step, total, message):
-            # In production, use websockets for real-time updates
-            pass
-        
-        model_loader.load_model(model_key, progress_callback=progress_callback)
+        model_loader.load_model(model_key)
         
         # Get a random test image
         image_ids = session.get('test_image_ids', [])
@@ -271,12 +242,9 @@ def load_and_predict(model_key):
         # Get predictions
         predictions = model_loader.predict(model_key, image, score_threshold=0.3)
         
-        # Get category names
-        category_names = format_coco_label_mapping()
-        
         # Visualize
         fig = visualize_predictions(
-            image, predictions, category_names,
+            image, predictions, format_coco_label_mapping(),
             score_threshold=0.3,
             title=f"{MODEL_CONFIGS[model_key]['name']} - Sample Prediction"
         )
@@ -301,11 +269,7 @@ def approve_model(model_key):
     approved = session.get('validation_approved', [])
     approved.append(model_key)
     session['validation_approved'] = approved
-    
-    # Move to next model
-    current_idx = session.get('current_validation_model_idx', 0)
-    session['current_validation_model_idx'] = current_idx + 1
-    
+    session['current_validation_model_idx'] = session.get('current_validation_model_idx', 0) + 1
     return jsonify({'success': True})
 
 
@@ -326,29 +290,22 @@ def execute_test():
         """Background function to run the test"""
         global test_progress
         try:
-            test_progress['status'] = 'running'
-            test_progress['progress'] = 0
-            test_progress['message'] = 'Initializing test...'
+            test_progress.update({
+                'status': 'running',
+                'progress': 0,
+                'message': 'Initializing test...'
+            })
             
-            # Use optimized batch processing
-            print("Using optimized batch processing with DataLoader")
             test = BatchOptimizedRobustnessTest(
-                model_loader, 
-                evaluator, 
-                batch_size=4,  # Conservative for single GPU
-                num_workers=2   # Parallel data loading
+                model_loader, evaluator,
+                batch_size=4, num_workers=2
             )
             
-            # Progress callback
             def progress_callback(current, total, message):
                 global test_progress
                 test_progress['progress'] = int((current / total) * 100)
                 test_progress['message'] = message
-                print(f"[PROGRESS] {current}/{total} ({test_progress['progress']}%) - {message}")
-                import sys
-                sys.stdout.flush()
             
-            # Run tests
             results = test.run_full_test(
                 model_keys=model_keys,
                 corruption_names=corruptions,
@@ -357,22 +314,23 @@ def execute_test():
                 progress_callback=progress_callback
             )
             
-            # Save results
             test.save_results('static/test_results.json')
             
-            test_progress['status'] = 'completed'
-            test_progress['progress'] = 100
-            test_progress['message'] = 'Test completed successfully!'
-            test_progress['results_ready'] = True
+            test_progress.update({
+                'status': 'completed',
+                'progress': 100,
+                'message': 'Test completed successfully!',
+                'results_ready': True
+            })
             
         except Exception as e:
-            test_progress['status'] = 'error'
-            test_progress['message'] = str(e)
-            print(f"Error in test: {e}")
+            test_progress.update({
+                'status': 'error',
+                'message': str(e)
+            })
             import traceback
             traceback.print_exc()
     
-    # Start background thread
     thread = threading.Thread(target=run_test_background)
     thread.daemon = True
     thread.start()

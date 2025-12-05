@@ -15,7 +15,7 @@
     
     <form method="POST">
         <!-- Dataset Selection Section -->
-        <h3 style="margin: 30px 0 20px 0; color: #444; font-size: 1.3rem;">Select Dataset</h3>
+        <h3 class="section-heading">Select Dataset</h3>
         
         <div class="section">
             <div class="detector-grid">
@@ -35,7 +35,7 @@
         </div>
         
         <!-- Corruption Selection Section -->
-        <h3 style="margin: 30px 0 20px 0; color: #444; font-size: 1.3rem;">Select Corruptions</h3>
+        <h3 class="section-heading">Select Corruptions</h3>
         
         {% for category, corruption_list in corruptions.items() %}
         <div class="section corruption-category">
@@ -84,36 +84,26 @@
 
 {% block scripts %}
 <script>
-    // Select All / Deselect All functionality
-    document.querySelectorAll('.select-all').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const category = this.dataset.category;
-            document.querySelectorAll(`.category-${category}`).forEach(checkbox => {
-                checkbox.checked = true;
-            });
+// Select All / Deselect All functionality
+document.querySelectorAll('.select-all, .deselect-all').forEach(btn => {
+    btn.addEventListener('click', function() {
+        const checked = this.classList.contains('select-all');
+        document.querySelectorAll(`.category-${this.dataset.category}`).forEach(cb => {
+            cb.checked = checked;
         });
     });
-    
-    document.querySelectorAll('.deselect-all').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const category = this.dataset.category;
-            document.querySelectorAll(`.category-${category}`).forEach(checkbox => {
-                checkbox.checked = false;
-            });
-        });
-    });
-    
-    // Preview functionality - generate preview when clicking preview button
-    {% if show_preview %}
-    // Trigger preview generation
-    fetch('/preview_corruption')
-        .then(response => response.json())
-        .then(data => {
-            if (data.preview_url) {
-                document.querySelector('.preview-image').src = data.preview_url + '?t=' + new Date().getTime();
-            }
-        })
-        .catch(error => console.error('Error generating preview:', error));
-    {% endif %}
+});
+
+// Preview functionality
+{% if show_preview %}
+fetch('/preview_corruption')
+    .then(res => res.json())
+    .then(data => {
+        if (data.preview_url) {
+            document.querySelector('.preview-image').src = `${data.preview_url}?t=${Date.now()}`;
+        }
+    })
+    .catch(err => console.error('Preview error:', err));
+{% endif %}
 </script>
 {% endblock %}

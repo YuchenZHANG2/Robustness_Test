@@ -29,65 +29,55 @@
 
 {% block scripts %}
 <script>
-    let progressInterval;
+let progressInterval;
+const elements = {
+    bar: document.getElementById('test-progress'),
+    text: document.getElementById('progress-text'),
+    pct: document.getElementById('progress-percentage'),
+    log: document.getElementById('log-container')
+};
+
+function updateProgress(data) {
+    elements.bar.style.width = data.progress + '%';
+    elements.pct.textContent = data.progress + '%';
+    elements.text.textContent = data.message;
     
-    window.onload = function() {
-        const progressBar = document.getElementById('test-progress');
-        const progressText = document.getElementById('progress-text');
-        const progressPercentage = document.getElementById('progress-percentage');
-        const logContainer = document.getElementById('log-container');
-        
-        function updateProgress(data) {
-            progressBar.style.width = data.progress + '%';
-            progressPercentage.textContent = data.progress + '%';
-            progressText.textContent = data.message;
-            
-            // Add to log
-            const logEntry = document.createElement('p');
-            logEntry.textContent = `[${new Date().toLocaleTimeString()}] ${data.message}`;
-            logContainer.appendChild(logEntry);
-            logContainer.scrollTop = logContainer.scrollHeight;
-        }
-        
-        function pollProgress() {
-            fetch('/test_progress')
-                .then(response => response.json())
-                .then(data => {
-                    updateProgress(data);
-                    
-                    if (data.status === 'completed') {
-                        clearInterval(progressInterval);
-                        setTimeout(() => {
-                            window.location.href = '/show_results';
-                        }, 1000);
-                    } else if (data.status === 'error') {
-                        clearInterval(progressInterval);
-                        updateProgress({progress: 0, message: 'Error: ' + data.message});
-                    }
-                })
-                .catch(error => {
-                    console.error('Error polling progress:', error);
-                });
-        }
-        
-        // Start the test
-        updateProgress({progress: 5, message: 'Starting test...'});
-        
-        fetch('/execute_test')
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    updateProgress({progress: 10, message: 'Test running in background...'});
-                    // Poll for progress every 2 seconds
-                    progressInterval = setInterval(pollProgress, 2000);
-                } else {
-                    updateProgress({progress: 0, message: 'Error: ' + data.error});
-                }
-            })
-            .catch(error => {
-                updateProgress({progress: 0, message: 'Error: ' + error.toString()});
-            });
-    };
+    const entry = document.createElement('p');
+    entry.textContent = `[${new Date().toLocaleTimeString()}] ${data.message}`;
+    elements.log.appendChild(entry);
+    elements.log.scrollTop = elements.log.scrollHeight;
+}
+
+function pollProgress() {
+    fetch('/test_progress')
+        .then(res => res.json())
+        .then(data => {
+            updateProgress(data);
+            if (data.status === 'completed') {
+                clearInterval(progressInterval);
+                setTimeout(() => window.location.href = '/show_results', 1000);
+            } else if (data.status === 'error') {
+                clearInterval(progressInterval);
+                updateProgress({progress: 0, message: 'Error: ' + data.message});
+            }
+        })
+        .catch(err => console.error('Polling error:', err));
+}
+
+window.onload = () => {
+    updateProgress({progress: 5, message: 'Starting test...'});
+    fetch('/execute_test')
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                updateProgress({progress: 10, message: 'Test running in background...'});
+                progressInterval = setInterval(pollProgress, 2000);
+            } else {
+                updateProgress({progress: 0, message: 'Error: ' + data.error});
+            }
+        })
+        .catch(err => updateProgress({progress: 0, message: 'Error: ' + err}));
+};
 </script>
 
 <style>

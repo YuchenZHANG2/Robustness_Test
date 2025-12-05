@@ -115,32 +115,23 @@ def generate_preview(corruption_names, severity=3, output_dir='static/previews')
 
 def create_placeholder_image(path, size=(640, 480)):
     """Create a simple placeholder image if showcase.png doesn't exist."""
-    from PIL import Image, ImageDraw, ImageFont
+    from PIL import Image, ImageDraw
     
-    # Create a gradient background
     img = Image.new('RGB', size, color='white')
     draw = ImageDraw.Draw(img)
     
-    # Draw a simple pattern
+    # Draw a simple gradient pattern
     for i in range(0, size[0], 40):
         for j in range(0, size[1], 40):
             color = ((i * 255) // size[0], (j * 255) // size[1], 128)
             draw.rectangle([i, j, i+39, j+39], fill=color)
     
     # Add text
-    try:
-        text = "Showcase Image"
-        bbox = draw.textbbox((0, 0), text)
-        text_width = bbox[2] - bbox[0]
-        text_height = bbox[3] - bbox[1]
-        position = ((size[0] - text_width) // 2, (size[1] - text_height) // 2)
-        
-        # Draw shadow
-        draw.text((position[0]+2, position[1]+2), text, fill='black')
-        # Draw text
-        draw.text(position, text, fill='white')
-    except:
-        pass
+    text = "Showcase Image"
+    bbox = draw.textbbox((0, 0), text)
+    position = ((size[0] - (bbox[2] - bbox[0])) // 2, (size[1] - (bbox[3] - bbox[1])) // 2)
+    draw.text((position[0]+2, position[1]+2), text, fill='black')  # Shadow
+    draw.text(position, text, fill='white')
     
     img.save(path)
     print(f"Created placeholder image at {path}")

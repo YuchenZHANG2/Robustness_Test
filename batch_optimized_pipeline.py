@@ -435,31 +435,6 @@ class BatchOptimizedRobustnessTest:
         
         return results
     
-    def predict_batch(self, model_key, images: List[Image.Image],
-                      score_threshold: float = 0.05) -> List[Dict]:
-        """
-        Universal batch prediction method.
-        
-        Args:
-            model_key: Model configuration key
-            images: List of PIL Images
-            score_threshold: Minimum confidence score
-        
-        Returns:
-            List of predictions (one dict per image)
-        """
-        from model_loader import MODEL_CONFIGS
-        
-        config = MODEL_CONFIGS[model_key]
-        model = self.model_loader.models[model_key]
-        
-        if config['type'] == 'torchvision':
-            return self.predict_batch_torchvision(model, images, score_threshold)
-        elif config['type'] == 'huggingface':
-            return self.predict_batch_huggingface(model_key, images, score_threshold)
-        else:
-            raise ValueError(f"Unknown model type: {config['type']}")
-    
     def predict_batch_tensor(self, model_key, batch_tensor: torch.Tensor,
                              transformations: List[Dict],
                              score_threshold: float = 0.05) -> List[Dict]:
@@ -490,78 +465,6 @@ class BatchOptimizedRobustnessTest:
             )
         else:
             raise ValueError(f"Unknown model type: {config['type']}")
-    
-    def test_model_batch(self, model_key, image_ids, corruption_name=None,
-                        severity=None, progress_callback=None) -> Dict:
-        """
-        Test model with batch processing and optional corruption.
-        
-        Args:
-            model_key: Model configuration key
-            image_ids: List of COCO image IDs
-            corruption_name: Optional corruption to apply
-            severity: Optional corruption severity (1-5)
-            progress_callback: Optional callback(current, total, message)
-        
-        Returns:
-            Dictionary with predictions and metrics
-        """
-        # Create dataset (just loads images)
-        dataset = COCODetectionDataset(self.evaluator, image_ids)
-        
-        # Create DataLoader with multiple workers for parallel loading
-        dataloader = DataLoader(
-            dataset,
-            batch_size=self.batch_size,
-            shuffle=False,
-            num_workers=self.num_workers,
-            collate_fn=collate_fn,
-            pin_memory=True if self.device == 'cuda' else False,
-            prefetch_factor=2 if self.num_workers > 0 else None,
-            persistent_workers=True if self.num_workers > 0 else False
-        )
-        
-        all_predictions = []
-        total_batches = len(dataloader)
-        
-        # Process in batches
-        for batch_idx, batch in enumerate(dataloader):
-            if progress_callback:
-                current = (batch_idx + 1) * self.batch_size
-                total = len(image_ids)
-                msg_suffix = f" ({corruption_name} sev{severity})" if corruption_name else " (clean)"
-                progress_callback(
-                    min(current, total), 
-                    total,
-                    f"Processing batch {batch_idx + 1}/{total_batches}{msg_suffix}"
-                )
-            
-            # Apply corruption to entire batch on GPU if needed
-            images = batch['images']
-            if corruption_name:
-                images = self.apply_batch_corruption(images, corruption_name, severity)
-            
-            # Batch prediction
-            batch_preds = self.predict_batch(
-                model_key, 
-                images,
-                score_threshold=0.05
-            )
-            
-            # Convert to COCO format
-            for preds, image_id in zip(batch_preds, batch['image_ids']):
-                coco_preds = self.evaluator.convert_predictions_to_coco_format(
-                    preds, image_id, label_offset=0
-                )
-                all_predictions.extend(coco_preds)
-        
-        # Evaluate
-        metrics = self.evaluator.evaluate_predictions(all_predictions, image_ids)
-        
-        return {
-            'predictions': all_predictions,
-            'metrics': metrics
-        }
     
     def run_full_test(self, model_keys, corruption_names, image_ids,
                      severities=[1, 2, 3, 4, 5], progress_callback=None) -> Dict:
@@ -713,31 +616,3 @@ class BatchOptimizedRobustnessTest:
         """Save results to JSON file."""
         with open(output_path, 'w') as f:
             json.dump(self.results, f, indent=2)
-    
-    def get_summary_table(self):
-        """
-        Generate a summary table of mAP values.
-        
-        Returns:
-            Dictionary suitable for display
-        """
-        summary = {}
-        
-        for model_key, model_results in self.results.items():
-            model_name = model_results['name']
-            summary[model_name] = {
-                'Clean': model_results['clean'].get('mAP', 0.0)
-            }
-            
-            # Average mAP across all corruptions and severities
-            all_corrupt_maps = []
-            for corruption, severity_results in model_results['corrupted'].items():
-                for severity, metrics in severity_results.items():
-                    all_corrupt_maps.append(metrics.get('mAP', 0.0))
-            
-            if all_corrupt_maps:
-                summary[model_name]['Corrupted (avg)'] = np.mean(all_corrupt_maps)
-                summary[model_name]['Degradation'] = \
-                    summary[model_name]['Clean'] - summary[model_name]['Corrupted (avg)']
-        
-        return summary

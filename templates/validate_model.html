@@ -45,48 +45,46 @@
 
 {% block scripts %}
 <script>
-    const modelKey = "{{ model_key }}";
-    
-    // Load model and get prediction
-    window.onload = function() {
-        fetch(`/load_and_predict/${modelKey}`)
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    // Show prediction
-                    document.getElementById('prediction-image').src = data.image;
-                    document.getElementById('num-detections').textContent = data.num_detections;
-                    document.getElementById('loading-section').style.display = 'none';
-                    document.getElementById('prediction-section').style.display = 'block';
-                } else {
-                    // Show error
-                    document.getElementById('error-text').textContent = data.error;
-                    document.getElementById('loading-section').style.display = 'none';
-                    document.getElementById('error-section').style.display = 'block';
-                }
-            })
-            .catch(error => {
-                document.getElementById('error-text').textContent = error.toString();
-                document.getElementById('loading-section').style.display = 'none';
-                document.getElementById('error-section').style.display = 'block';
-            });
-    };
-    
-    function approveModel() {
-        fetch(`/approve_model/${modelKey}`, {method: 'POST'})
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    window.location.href = '/validate_model';
-                }
-            });
-    }
-    
-    function rejectModel() {
-        if (confirm('Are you sure you want to go back and reselect models?')) {
-            window.location.href = '/step1';
-        }
-    }
+const modelKey = "{{ model_key }}";
+const sections = {
+    loading: document.getElementById('loading-section'),
+    prediction: document.getElementById('prediction-section'),
+    error: document.getElementById('error-section')
+};
+
+function showSection(name) {
+    Object.values(sections).forEach(s => s.style.display = 'none');
+    sections[name].style.display = 'block';
+}
+
+window.onload = () => {
+    fetch(`/load_and_predict/${modelKey}`)
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                document.getElementById('prediction-image').src = data.image;
+                document.getElementById('num-detections').textContent = data.num_detections;
+                showSection('prediction');
+            } else {
+                document.getElementById('error-text').textContent = data.error;
+                showSection('error');
+            }
+        })
+        .catch(error => {
+            document.getElementById('error-text').textContent = error.toString();
+            showSection('error');
+        });
+};
+
+function approveModel() {
+    fetch(`/approve_model/${modelKey}`, {method: 'POST'})
+        .then(res => res.json())
+        .then(data => data.success && (window.location.href = '/validate_model'));
+}
+
+function rejectModel() {
+    confirm('Are you sure you want to go back and reselect models?') && (window.location.href = '/step1');
+}
 </script>
 
 <style>

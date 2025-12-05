@@ -132,6 +132,12 @@ main {
     padding-bottom: 10px;
 }
 
+.section-heading {
+    margin: 30px 0 20px 0;
+    color: #444;
+    font-size: 1.3rem;
+}
+
 /* Detector Grid */
 .detector-grid {
     display: grid;

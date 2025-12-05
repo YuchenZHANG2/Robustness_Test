@@ -88,12 +88,3 @@ def fig_to_base64(fig):
     img_base64 = base64.b64encode(buf.read()).decode('utf-8')
     plt.close(fig)
     return img_base64
-
-
-def save_prediction_visualization(image, predictions, category_names, 
-                                  output_path, score_threshold=0.5):
-    """Save visualization to file."""
-    fig = visualize_predictions(image, predictions, category_names, 
-                                score_threshold=score_threshold)
-    fig.savefig(output_path, dpi=150, bbox_inches='tight')
-    plt.close(fig)

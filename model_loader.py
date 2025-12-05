@@ -263,9 +263,3 @@ class ModelLoader:
     def get_model_name(self, model_key):
         """Get the human-readable name of a model."""
         return MODEL_CONFIGS.get(model_key, {}).get('name', model_key)
-    
-    def unload_model(self, model_key):
-        """Free memory by unloading a model."""
-        if model_key in self.models:
-            del self.models[model_key]
-            torch.cuda.empty_cache()

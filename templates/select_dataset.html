@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block title %}Select Dataset - Step 1/4{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <h2 class="mb-4">Step 1/4: Select Dataset</h2>
+            
+            <div class="card">
+                <div class="card-body">
+                    <form method="POST">
+                        <div class="mb-4">
+                            <h5 class="mb-3">Choose which dataset to evaluate on:</h5>
+                            
+                            {% for dataset_name, config in datasets.items() %}
+                            <div class="form-check mb-3">
+                                <input class="form-check-input" type="radio" 
+                                       name="dataset" id="dataset_{{ dataset_name }}" 
+                                       value="{{ dataset_name }}" 
+                                       {% if loop.first %}checked{% endif %}>
+                                <label class="form-check-label" for="dataset_{{ dataset_name }}">
+                                    <strong>{{ dataset_name }}</strong>
+                                    <br>
+                                    <small class="text-muted">
+                                        {% if dataset_name == 'COCO' %}
+                                        COCO Validation Set - 80 object classes
+                                        {% elif dataset_name == 'Construction' %}
+                                        Construction Site Dataset - Person detection only
+                                        {% endif %}
+                                    </small>
+                                    {% if config['filter_classes'] %}
+                                    <br>
+                                    <span class="badge bg-info">Filtered to specific classes</span>
+                                    {% endif %}
+                                </label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        
+                        <div class="alert alert-info" role="alert">
+                            <strong>Note:</strong> The selected dataset will be used for all subsequent testing steps.
+                        </div>
+                        
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                Next: Select Detectors →
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

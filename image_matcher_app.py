@@ -277,9 +277,38 @@ def upload_folders():
             print("ERROR: No matching pairs found")
             return jsonify({'error': 'No matching image pairs found in the uploaded folders'}), 400
         
+        # Filter out pairs that already exist in matched_crops
+        output_dir1 = app.config['OUTPUT_FOLDER'] / 'cropped_img1'
+        output_dir2 = app.config['OUTPUT_FOLDER'] / 'cropped_img2'
+        
+        filtered_pairs = []
+        skipped_pairs = []
+        
+        for pair in pairs:
+            base_name = Path(pair['name']).stem
+            ext = Path(pair['name']).suffix
+            
+            out1 = output_dir1 / f"{base_name}_cropped{ext}"
+            out2 = output_dir2 / f"{base_name}_cropped{ext}"
+            
+            # Check if both cropped files already exist
+            if out1.exists() and out2.exists():
+                skipped_pairs.append(pair['name'])
+                print(f"  Skipping {pair['name']} - already processed")
+            else:
+                filtered_pairs.append(pair)
+        
+        print(f"Filtered pairs: {len(filtered_pairs)} new, {len(skipped_pairs)} skipped")
+        
+        if not filtered_pairs:
+            return jsonify({
+                'error': f'All {len(pairs)} matching pairs have already been processed',
+                'skipped_count': len(skipped_pairs)
+            }), 400
+        
         session_data['folder1_path'] = str(upload_dir1)
         session_data['folder2_path'] = str(upload_dir2)
-        session_data['image_pairs'] = pairs
+        session_data['image_pairs'] = filtered_pairs
         session_data['current_pair_index'] = 0
         
         print("SUCCESS: Returning response")
@@ -287,9 +316,10 @@ def upload_folders():
         
         return jsonify({
             'success': True,
-            'num_pairs': len(pairs),
-            'pairs': [p['name'] for p in pairs],
-            'current_pair': pairs[0]['name']
+            'num_pairs': len(filtered_pairs),
+            'pairs': [p['name'] for p in filtered_pairs],
+            'current_pair': filtered_pairs[0]['name'],
+            'skipped_count': len(skipped_pairs)
         })
     
     except Exception as e:

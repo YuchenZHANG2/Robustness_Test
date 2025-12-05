@@ -13,17 +13,23 @@ import random
 class COCOEvaluator:
     """Evaluate object detection models on COCO dataset."""
     
-    def __init__(self, annotation_file, image_dir):
+    def __init__(self, annotation_file, image_dir, filter_classes=None, class_mapping=None):
         """
         Initialize COCO evaluator.
         
         Args:
             annotation_file: Path to COCO annotation JSON file
             image_dir: Directory containing COCO images
+            filter_classes: Optional list of class IDs to filter ground truth annotations
+                          (e.g., [3] to only evaluate on "person" class in Construction dataset)
+            class_mapping: Optional dict to map dataset class IDs to COCO IDs
+                         (e.g., {3: 1} to map Construction's person (3) to COCO's person (1))
         """
         self.annotation_file = annotation_file
         self.image_dir = Path(image_dir)
         self.coco_gt = COCO(annotation_file)
+        self.filter_classes = filter_classes
+        self.class_mapping = class_mapping or {}
         
     def get_random_images(self, n=50):
         """
@@ -58,6 +64,13 @@ class COCOEvaluator:
         if not predictions:
             return {'mAP': 0.0, 'mAP_50': 0.0, 'mAP_75': 0.0}
         
+        # Filter predictions by class if specified
+        if self.filter_classes:
+            predictions = [p for p in predictions if p['category_id'] in self.filter_classes]
+        
+        if not predictions:
+            return {'mAP': 0.0, 'mAP_50': 0.0, 'mAP_75': 0.0}
+        
         # Create results in COCO format
         coco_dt = self.coco_gt.loadRes(predictions)
         
@@ -66,6 +79,10 @@ class COCOEvaluator:
         
         if image_ids:
             coco_eval.params.imgIds = image_ids
+        
+        # Filter evaluation by specific classes if specified
+        if self.filter_classes:
+            coco_eval.params.catIds = self.filter_classes
         
         coco_eval.evaluate()
         coco_eval.accumulate()
@@ -96,6 +113,9 @@ class COCOEvaluator:
         """
         coco_results = []
         
+        # Apply inverse class mapping if needed (map COCO IDs back to dataset IDs)
+        inverse_mapping = {v: k for k, v in self.class_mapping.items()} if self.class_mapping else {}
+        
         boxes = model_predictions['boxes']
         labels = model_predictions['labels']
         scores = model_predictions['scores']
@@ -106,9 +126,19 @@ class COCOEvaluator:
             width = x2 - x1
             height = y2 - y1
             
+            # Apply label offset (e.g., for torchvision models)
+            predicted_label = int(label) + label_offset
+            
+            # Map COCO class ID back to dataset class ID if mapping exists
+            # (e.g., model predicts COCO person=1, map back to Construction person=3)
+            if inverse_mapping and predicted_label in inverse_mapping:
+                category_id = inverse_mapping[predicted_label]
+            else:
+                category_id = predicted_label
+            
             coco_results.append({
                 'image_id': int(image_id),
-                'category_id': int(label) + label_offset,
+                'category_id': category_id,
                 'bbox': [float(x1), float(y1), float(width), float(height)],
                 'score': float(score)
             })

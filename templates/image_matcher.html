@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Matcher & Overlay Viewer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+        
+        .controls {
+            padding: 25px;
+            background: #f8f9fa;
+            border-bottom: 2px solid #e9ecef;
+        }
+        
+        .control-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .control-group:last-child {
+            margin-bottom: 0;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+        
+        .btn-primary:hover:not(:disabled) {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-success {
+            background: #10b981;
+            color: white;
+        }
+        
+        .btn-success:hover:not(:disabled) {
+            background: #059669;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .btn-secondary:hover:not(:disabled) {
+            background: #5a6268;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(108, 117, 125, 0.4);
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .file-input-wrapper {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+        }
+        
+        .file-input-wrapper input[type=file] {
+            position: absolute;
+            left: -9999px;
+        }
+        
+        .slider-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .slider-group label {
+            font-weight: 600;
+            color: #495057;
+        }
+        
+        .slider {
+            width: 200px;
+            height: 6px;
+            border-radius: 3px;
+            background: #dee2e6;
+            outline: none;
+            -webkit-appearance: none;
+        }
+        
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .slider::-webkit-slider-thumb:hover {
+            background: #5568d3;
+            transform: scale(1.2);
+        }
+        
+        .slider::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+            border: none;
+        }
+        
+        .info-bar {
+            padding: 15px 25px;
+            background: #e7f3ff;
+            border-left: 4px solid #2196F3;
+            margin: 0;
+        }
+        
+        .info-bar.success {
+            background: #d4edda;
+            border-left-color: #28a745;
+            color: #155724;
+        }
+        
+        .info-bar.warning {
+            background: #fff3cd;
+            border-left-color: #ffc107;
+            color: #856404;
+        }
+        
+        .info-bar.error {
+            background: #f8d7da;
+            border-left-color: #dc3545;
+            color: #721c24;
+        }
+        
+        .display-area {
+            padding: 30px;
+            min-height: 500px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #f8f9fa;
+        }
+        
+        .display-area img {
+            max-width: 100%;
+            max-height: 700px;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+        
+        .placeholder {
+            text-align: center;
+            color: #6c757d;
+        }
+        
+        .placeholder svg {
+            width: 150px;
+            height: 150px;
+            margin-bottom: 20px;
+            opacity: 0.3;
+        }
+        
+        .status-bar {
+            padding: 12px 25px;
+            background: #343a40;
+            color: white;
+            font-size: 13px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .loader {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .separator {
+            width: 1px;
+            height: 30px;
+            background: #dee2e6;
+            margin: 0 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🖼️ Image Matcher & Overlay Viewer</h1>
+            <p>Match and compare image pairs from two folders with intelligent overlap detection</p>
+        </div>
+        
+        <div class="controls">
+            <div class="control-group">
+                <input type="file" id="folder1Input" webkitdirectory directory multiple style="display: none;">
+                <button class="btn btn-secondary" onclick="document.getElementById('folder1Input').click()">
+                    📁 Choose Folder 1
+                </button>
+                <span id="folder1Path" style="margin-left: 10px; color: #495057; font-style: italic;">No folder selected</span>
+                
+                <div class="separator"></div>
+                
+                <input type="file" id="folder2Input" webkitdirectory directory multiple style="display: none;">
+                <button class="btn btn-secondary" onclick="document.getElementById('folder2Input').click()">
+                    📁 Choose Folder 2
+                </button>
+                <span id="folder2Path" style="margin-left: 10px; color: #495057; font-style: italic;">No folder selected</span>
+                
+                <div class="separator"></div>
+                
+                <button class="btn btn-primary" onclick="loadFolders()" id="loadBtn" disabled>
+                    🚀 Load Folders
+                </button>
+                
+                <div class="separator"></div>
+                
+                <button class="btn btn-primary" id="prevBtn" onclick="navigatePair('prev')" disabled>
+                    ◀ Previous
+                </button>
+                
+                <span id="pairInfo" style="font-weight: 600; color: #495057; min-width: 150px; text-align: center;">No pairs loaded</span>
+                
+                <button class="btn btn-primary" id="nextBtn" onclick="navigatePair('next')" disabled>
+                    Next ▶
+                </button>
+                
+                <div class="separator"></div>
+                
+                <button class="btn btn-success" id="matchBtn" onclick="matchImages()" disabled>
+                    🔍 Match Current Pair
+                </button>
+            </div>
+            
+            <div class="control-group">
+                <button class="btn btn-secondary" id="overlayBtn" onclick="toggleOverlay()" disabled>
+                    👁️ Show Overlay
+                </button>
+                
+                <div class="slider-group">
+                    <label for="alphaSlider">Folder 1 Opacity:</label>
+                    <input type="range" id="alphaSlider" class="slider" min="0" max="100" value="50" 
+                           oninput="updateView()" disabled>
+                    <span id="alphaValue">50%</span>
+                </div>
+                
+                <div class="separator"></div>
+                
+                <button class="btn btn-success" id="saveBtn" onclick="saveCropped()" disabled>
+                    💾 Save Current Pair
+                </button>
+                
+                <button class="btn btn-success" id="saveAllBtn" onclick="saveAllCropped()" disabled>
+                    💾💾 Save All Pairs
+                </button>
+            </div>
+        </div>
+        
+        <div class="info-bar" id="infoBar">
+            Enter paths to two folders containing images with matching names
+        </div>
+        
+        <div class="display-area" id="displayArea">
+            <div class="placeholder">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                    <circle cx="8.5" cy="8.5" r="1.5"/>
+                    <polyline points="21 15 16 10 5 21"/>
+                </svg>
+                <h3>No images loaded</h3>
+                <p>Upload two images to start matching and comparing</p>
+            </div>
+        </div>
+        
+        <div class="status-bar">
+            <span id="statusText">Ready</span>
+            <span id="statusLoader" style="display: none;"><span class="loader"></span></span>
+        </div>
+    </div>
+
+    <script>
+        let foldersLoaded = false;
+        let matched = false;
+        let showOverlay = false;
+        let currentPairIndex = 0;
+        let totalPairs = 0;
+        let folder1Path = null;
+        let folder2Path = null;
+
+        // Handle folder 1 selection
+        document.getElementById('folder1Input').addEventListener('change', function(e) {
+            const files = e.target.files;
+            if (files.length > 0) {
+                // Get folder path from the first file
+                const firstFile = files[0];
+                const pathParts = firstFile.webkitRelativePath.split('/');
+                folder1Path = pathParts[0];
+                
+                document.getElementById('folder1Path').textContent = folder1Path;
+                document.getElementById('folder1Path').style.fontStyle = 'normal';
+                document.getElementById('folder1Path').style.fontWeight = '600';
+                
+                checkBothFoldersSelected();
+            }
+        });
+
+        // Handle folder 2 selection
+        document.getElementById('folder2Input').addEventListener('change', function(e) {
+            const files = e.target.files;
+            if (files.length > 0) {
+                // Get folder path from the first file
+                const firstFile = files[0];
+                const pathParts = firstFile.webkitRelativePath.split('/');
+                folder2Path = pathParts[0];
+                
+                document.getElementById('folder2Path').textContent = folder2Path;
+                document.getElementById('folder2Path').style.fontStyle = 'normal';
+                document.getElementById('folder2Path').style.fontWeight = '600';
+                
+                checkBothFoldersSelected();
+            }
+        });
+
+        function checkBothFoldersSelected() {
+            const loadBtn = document.getElementById('loadBtn');
+            if (folder1Path && folder2Path) {
+                loadBtn.disabled = false;
+            } else {
+                loadBtn.disabled = true;
+            }
+        }
+
+        function setStatus(text, loading = false) {
+            document.getElementById('statusText').textContent = text;
+            document.getElementById('statusLoader').style.display = loading ? 'block' : 'none';
+        }
+
+        function setInfo(text, type = 'info') {
+            const infoBar = document.getElementById('infoBar');
+            infoBar.textContent = text;
+            infoBar.className = 'info-bar ' + type;
+        }
+
+        async function loadFolders() {
+            if (!folder1Path || !folder2Path) {
+                setInfo('Please select both folders', 'error');
+                return;
+            }
+            
+            console.log('='.repeat(60));
+            console.log('LOADING FOLDERS');
+            console.log('Folder 1:', folder1Path);
+            console.log('Folder 2:', folder2Path);
+            
+            setStatus('Uploading folders...', true);
+            
+            try {
+                // Get files from both folder inputs
+                const folder1Files = document.getElementById('folder1Input').files;
+                const folder2Files = document.getElementById('folder2Input').files;
+                
+                console.log('Folder 1 files count:', folder1Files.length);
+                console.log('Folder 2 files count:', folder2Files.length);
+                
+                // Create FormData to upload files
+                const formData = new FormData();
+                
+                // Add files from folder 1
+                for (let i = 0; i < folder1Files.length; i++) {
+                    console.log('Adding to folder1_files:', folder1Files[i].name);
+                    formData.append('folder1_files', folder1Files[i]);
+                }
+                
+                // Add files from folder 2
+                for (let i = 0; i < folder2Files.length; i++) {
+                    console.log('Adding to folder2_files:', folder2Files[i].name);
+                    formData.append('folder2_files', folder2Files[i]);
+                }
+                
+                console.log('Sending POST request to /upload_folders');
+                
+                const response = await fetch('/upload_folders', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                console.log('Response status:', response.status);
+                console.log('Response content-type:', response.headers.get('content-type'));
+                
+                const responseText = await response.text();
+                console.log('Response text:', responseText);
+                
+                const data = JSON.parse(responseText);
+                
+                if (data.success) {
+                    foldersLoaded = true;
+                    totalPairs = data.num_pairs;
+                    currentPairIndex = 0;
+                    
+                    document.getElementById('prevBtn').disabled = false;
+                    document.getElementById('nextBtn').disabled = false;
+                    document.getElementById('matchBtn').disabled = false;
+                    document.getElementById('saveAllBtn').disabled = false;
+                    
+                    updatePairInfo();
+                    
+                    let message = `✓ Loaded ${data.num_pairs} matching image pairs. Current: ${data.current_pair}`;
+                    if (data.skipped_count > 0) {
+                        message += ` (${data.skipped_count} already processed, skipped)`;
+                    }
+                    
+                    setInfo(message, 'success');
+                    setStatus(`Found ${data.num_pairs} matching pairs`);
+                    
+                    // Clear display
+                    document.getElementById('displayArea').innerHTML = `
+                        <div class="placeholder">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                                <circle cx="8.5" cy="8.5" r="1.5"/>
+                                <polyline points="21 15 16 10 5 21"/>
+                            </svg>
+                            <h3>Ready to match</h3>
+                            <p>Click "Match Current Pair" to begin</p>
+                        </div>
+                    `;
+                } else {
+                    setInfo('Error: ' + data.error, 'error');
+                    setStatus('Failed to load folders');
+                }
+            } catch (error) {
+                setInfo('Error loading folders: ' + error.message, 'error');
+                setStatus('Failed to load folders');
+            }
+        }
+
+        function updatePairInfo() {
+            document.getElementById('pairInfo').textContent = `Pair ${currentPairIndex + 1} / ${totalPairs}`;
+        }
+
+        async function navigatePair(direction) {
+            setStatus('Loading next pair...', true);
+            
+            try {
+                const response = await fetch('/navigate_pair', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        direction: direction
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    currentPairIndex = data.index;
+                    totalPairs = data.total;
+                    matched = false;
+                    showOverlay = false;
+                    
+                    // Disable overlay controls
+                    document.getElementById('overlayBtn').disabled = true;
+                    document.getElementById('overlayBtn').textContent = '👁️ Show Overlay';
+                    document.getElementById('alphaSlider').disabled = true;
+                    document.getElementById('saveBtn').disabled = true;
+                    
+                    updatePairInfo();
+                    setInfo(`Current pair: ${data.name}`, 'info');
+                    setStatus(`Viewing pair ${data.index + 1} of ${data.total}`);
+                    
+                    // Clear display
+                    document.getElementById('displayArea').innerHTML = `
+                        <div class="placeholder">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                                <circle cx="8.5" cy="8.5" r="1.5"/>
+                                <polyline points="21 15 16 10 5 21"/>
+                            </svg>
+                            <h3>${data.name}</h3>
+                            <p>Click "Match Current Pair" to process</p>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                setInfo('Error navigating: ' + error.message, 'error');
+            }
+        }
+
+        async function matchImages() {
+            if (!foldersLoaded) {
+                setInfo('Please load folders first!', 'error');
+                return;
+            }
+            
+            setStatus('Matching images...', true);
+            setInfo('Processing image matching and alignment...', 'info');
+            
+            try {
+                const response = await fetch('/match', {
+                    method: 'POST'
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    matched = true;
+                    
+                    // Enable overlay controls
+                    document.getElementById('overlayBtn').disabled = false;
+                    document.getElementById('alphaSlider').disabled = false;
+                    document.getElementById('saveBtn').disabled = false;
+                    
+                    // Show preview
+                    document.getElementById('displayArea').innerHTML = 
+                        `<img src="${data.preview}" alt="Matched Images">`;
+                    
+                    setInfo(
+                        `✓ Found ${data.num_matches} matches | Score: ${data.match_score} | ` +
+                        `Overlap: ${data.overlap_width}x${data.overlap_height}px`,
+                        'success'
+                    );
+                    setStatus('Images matched successfully');
+                } else {
+                    setInfo('Matching failed: ' + data.error, 'error');
+                    setStatus('Matching failed');
+                }
+            } catch (error) {
+                setInfo('Error matching images: ' + error.message, 'error');
+                setStatus('Matching failed');
+            }
+        }
+
+        async function toggleOverlay() {
+            showOverlay = !showOverlay;
+            const btn = document.getElementById('overlayBtn');
+            btn.textContent = showOverlay ? '👁️ Hide Overlay' : '👁️ Show Overlay';
+            await updateView();
+        }
+
+        async function updateView() {
+            if (!matched) return;
+            
+            const alpha = document.getElementById('alphaSlider').value / 100;
+            document.getElementById('alphaValue').textContent = 
+                document.getElementById('alphaSlider').value + '%';
+            
+            setStatus('Updating view...', true);
+            
+            try {
+                const response = await fetch('/get_view', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        show_overlay: showOverlay,
+                        alpha: alpha
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    document.getElementById('displayArea').innerHTML = 
+                        `<img src="${data.image}" alt="Image View">`;
+                    
+                    if (showOverlay) {
+                        setStatus(`Overlay: Folder 1 at ${Math.round(alpha * 100)}% opacity`);
+                    } else {
+                        setStatus('Showing side-by-side view');
+                    }
+                } else {
+                    setInfo('Error updating view: ' + data.error, 'error');
+                }
+            } catch (error) {
+                setInfo('Error updating view: ' + error.message, 'error');
+            }
+        }
+
+        async function saveCropped() {
+            setStatus('Saving cropped images...', true);
+            
+            try {
+                const response = await fetch('/save_cropped', {
+                    method: 'POST'
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    setInfo(
+                        `✓ Cropped images saved to: ${data.base_dir}`,
+                        'success'
+                    );
+                    setStatus('Images saved successfully');
+                    
+                    alert(
+                        'Cropped images saved successfully!\n\n' +
+                        `Image 1: ${data.path1}\n` +
+                        `Image 2: ${data.path2}`
+                    );
+                } else {
+                    setInfo('Error saving images: ' + data.error, 'error');
+                    setStatus('Save failed');
+                }
+            } catch (error) {
+                setInfo('Error saving images: ' + error.message, 'error');
+                setStatus('Save failed');
+            }
+        }
+
+        async function saveAllCropped() {
+            if (!confirm(`Process and save all ${totalPairs} image pairs?\n\nThis may take some time.`)) {
+                return;
+            }
+            
+            setStatus('Processing all pairs...', true);
+            setInfo('Processing and saving all pairs. Please wait...', 'info');
+            
+            try {
+                const response = await fetch('/save_all_cropped', {
+                    method: 'POST'
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    let message = `✓ Saved ${data.saved_count} out of ${data.total_pairs} pairs`;
+                    if (data.errors.length > 0) {
+                        message += ` | ${data.errors.length} errors`;
+                    }
+                    setInfo(message, data.errors.length > 0 ? 'warning' : 'success');
+                    setStatus('Batch processing complete');
+                    
+                    let alertMsg = `Saved ${data.saved_count} out of ${data.total_pairs} pairs\n\n`;
+                    alertMsg += `Output directory: ${data.base_dir}`;
+                    
+                    if (data.errors.length > 0) {
+                        alertMsg += `\n\nErrors:\n${data.errors.slice(0, 10).join('\n')}`;
+                        if (data.errors.length > 10) {
+                            alertMsg += `\n... and ${data.errors.length - 10} more`;
+                        }
+                    }
+                    
+                    alert(alertMsg);
+                } else {
+                    setInfo('Error: ' + data.error, 'error');
+                    setStatus('Batch save failed');
+                }
+            } catch (error) {
+                setInfo('Error saving all: ' + error.message, 'error');
+                setStatus('Batch save failed');
+            }
+        }
+    </script>
+</body>
+</html>

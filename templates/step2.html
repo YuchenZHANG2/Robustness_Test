@@ -10,10 +10,33 @@
 
 {% block content %}
 <div class="step-card">
-    <h2>Step 2: Select Corruptions</h2>
-    <p class="step-description">Choose which corruption types to apply to your test images.</p>
+    <h2>Step 2: Select Dataset & Corruptions</h2>
+    <p class="step-description">Choose which dataset to evaluate and which corruption types to apply.</p>
     
-    <form method="POST" id="corruption-form">
+    <form method="POST">
+        <!-- Dataset Selection Section -->
+        <h3 style="margin: 30px 0 20px 0; color: #444; font-size: 1.3rem;">Select Dataset</h3>
+        
+        <div class="section">
+            <div class="detector-grid">
+                {% for dataset_name, config in datasets.items() %}
+                <div class="radio-item">
+                    <input type="radio" id="dataset_{{ dataset_name }}" name="dataset" value="{{ dataset_name }}" 
+                           {% if (selected_dataset and dataset_name == selected_dataset) or (not selected_dataset and loop.first) %}checked{% endif %}>
+                    <label for="dataset_{{ dataset_name }}">
+                        <strong>{{ dataset_name }}</strong>
+                        {% if dataset_name == 'COCO' %}
+                        {% elif dataset_name == 'Construction' %}
+                        {% endif %}
+                    </label>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        
+        <!-- Corruption Selection Section -->
+        <h3 style="margin: 30px 0 20px 0; color: #444; font-size: 1.3rem;">Select Corruptions</h3>
+        
         {% for category, corruption_list in corruptions.items() %}
         <div class="section corruption-category">
             <div class="category-header">

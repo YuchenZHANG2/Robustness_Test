@@ -25,7 +25,7 @@ test_progress = {
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-change-in-production'
 app.config['UPLOAD_FOLDER'] = 'uploads'
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
+app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 16MB max file size
 
 # Ensure upload directory exists
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -33,10 +33,44 @@ os.makedirs('static/validation', exist_ok=True)
 
 # Initialize model loader and evaluator
 model_loader = ModelLoader()
+
+# ============================================================================
+# DATASET SELECTION - Change SELECTED_DATASET to switch between datasets
+# ============================================================================
+DATASET_CONFIG = {
+    'COCO': {
+        'annotation_file': '/home/yuchen/YuchenZ/Datasets/coco/annotations/instances_val2017.json',
+        'image_dir': '/home/yuchen/YuchenZ/Datasets/coco/val2017',
+        'filter_classes': None,  # Use all classes
+        'class_mapping': None  # No mapping needed (COCO labels are standard)
+    },
+    'Construction': {
+        'annotation_file': '/home/yuchen/YuchenZ/lab/Detector_test/DustyConstruction.v2i.coco/_annotations.coco.json',
+        'image_dir': '/home/yuchen/YuchenZ/lab/Detector_test/DustyConstruction.v2i.coco/train',
+        'filter_classes': [3],  # Only evaluate "person" class (id=3 in Construction dataset)
+        'class_mapping': {3: 1}  # Map Construction's person (id=3) to COCO's person (id=1)
+    }
+}
+
+# >>> CHANGE THIS LINE TO SWITCH DATASETS <<<
+SELECTED_DATASET = 'Construction'  # Options: 'COCO' or 'Construction'
+# ============================================================================
+
+# Initialize with Construction dataset as default (will be overridden by user selection)
+dataset_config = DATASET_CONFIG[SELECTED_DATASET]
 evaluator = COCOEvaluator(
-    annotation_file='/home/yuchen/YuchenZ/Datasets/coco/annotations/instances_val2017.json',
-    image_dir='/home/yuchen/YuchenZ/Datasets/coco/val2017'
+    annotation_file=dataset_config['annotation_file'],
+    image_dir=dataset_config['image_dir'],
+    filter_classes=dataset_config['filter_classes'],
+    class_mapping=dataset_config['class_mapping']
 )
+
+print(f"Default dataset: {SELECTED_DATASET}")
+print(f"  (Will be overridden by user selection in the app)")
+if dataset_config['filter_classes']:
+    print(f"  Filtering to classes: {dataset_config['filter_classes']}")
+if dataset_config['class_mapping']:
+    print(f"  Class mapping: {dataset_config['class_mapping']}")
 
 # Predefined detector models
 # Maps display name -> (model_config_key, full_name)
@@ -90,13 +124,16 @@ def step1():
 
 @app.route('/step2', methods=['GET', 'POST'])
 def step2():
-    """Step 2/3: Corruption Selection with Preview"""
+    """Step 2/3: Dataset and Corruption Selection"""
     if request.method == 'POST':
         action = request.form.get('action')
         
         if action == 'back':
             return redirect(url_for('step1'))
         elif action == 'preview':
+            # Get selected dataset
+            selected_dataset = request.form.get('dataset')
+            
             # Get selected corruptions for preview
             selected_corruptions = []
             for category, corruption_list in CORRUPTIONS.items():
@@ -108,9 +145,25 @@ def step2():
             # Return to same page to show preview
             return render_template('step2.html', 
                                  corruptions=CORRUPTIONS,
+                                 datasets=DATASET_CONFIG,
+                                 selected_dataset=selected_dataset,
                                  selected_corruptions=selected_corruptions,
                                  show_preview=True)
         elif action == 'next':
+            # Store selected dataset
+            selected_dataset = request.form.get('dataset')
+            session['selected_dataset'] = selected_dataset
+            
+            # Update global evaluator based on selection
+            global evaluator
+            dataset_config = DATASET_CONFIG[selected_dataset]
+            evaluator = COCOEvaluator(
+                annotation_file=dataset_config['annotation_file'],
+                image_dir=dataset_config['image_dir'],
+                filter_classes=dataset_config['filter_classes'],
+                class_mapping=dataset_config['class_mapping']
+            )
+            
             # Store corruptions and move to next step
             selected_corruptions = []
             for category, corruption_list in CORRUPTIONS.items():
@@ -121,7 +174,7 @@ def step2():
             session['selected_corruptions'] = selected_corruptions
             return redirect(url_for('step3'))
     
-    return render_template('step2.html', corruptions=CORRUPTIONS, show_preview=False)
+    return render_template('step2.html', corruptions=CORRUPTIONS, datasets=DATASET_CONFIG, show_preview=False)
 
 
 @app.route('/step3', methods=['GET', 'POST'])

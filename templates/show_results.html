@@ -7,23 +7,33 @@
     
     <div class="section">
         <h3>Summary: mAP Comparison</h3>
+        
+        <!-- Category Selector -->
+        <div class="category-selector-container">
+            <label for="category-selector"><strong>View by Category:</strong></label>
+            <select id="category-selector" onchange="updateTableByCategory()">
+                <option value="overall">Overall (All Categories)</option>
+            </select>
+            <p class="help-text">Select a specific category to view AP for that category only</p>
+        </div>
+        
         <div class="results-table-container">
             <table class="results-table">
                 <thead>
                     <tr>
                         <th>Model</th>
-                        <th>Clean mAP</th>
-                        <th>Average Corrupted mAP</th>
+                        <th id="clean-map-header">Clean mAP</th>
+                        <th id="avg-corrupted-header">Average Corrupted mAP</th>
                         <th>Degradation</th>
                         <th>Robustness Score</th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody id="results-table-body">
                     {% for model_key, model_data in results.items() %}
-                    <tr>
+                    <tr data-model-key="{{ model_key }}">
                         <td><strong>{{ model_data.name }}</strong></td>
-                        <td>{{ "%.3f"|format(model_data.clean.mAP) }}</td>
-                        <td>
+                        <td class="clean-map-cell">{{ "%.3f"|format(model_data.clean.mAP) }}</td>
+                        <td class="avg-corrupted-cell">
                             {% set corrupt_maps = [] %}
                             {% for corruption, severities in model_data.corrupted.items() %}
                                 {% for severity, metrics in severities.items() %}
@@ -32,7 +42,7 @@
                             {% endfor %}
                             {{ "%.3f"|format(corrupt_maps|sum / corrupt_maps|length) if corrupt_maps else "N/A" }}
                         </td>
-                        <td>
+                        <td class="degradation-cell">
                             {% if corrupt_maps %}
                                 {% set avg_corrupt = corrupt_maps|sum / corrupt_maps|length %}
                                 {% set degradation = model_data.clean.mAP - avg_corrupt %}
@@ -41,7 +51,7 @@
                                 N/A
                             {% endif %}
                         </td>
-                        <td>
+                        <td class="robustness-cell">
                             {% if corrupt_maps %}
                                 {% set avg_corrupt = corrupt_maps|sum / corrupt_maps|length %}
                                 {% set robustness = (avg_corrupt / model_data.clean.mAP * 100) if model_data.clean.mAP > 0 else 0 %}
@@ -86,6 +96,175 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
     const plotData = {{ plot_data|safe }};
+    const categoryNames = {{ category_names|safe }};
+    const resultsData = {{ results|tojson|safe }};
+    
+    // Populate category selector
+    window.addEventListener('DOMContentLoaded', () => {
+        const selector = document.getElementById('category-selector');
+        
+        // Add all available categories from results
+        const categories = new Set();
+        Object.values(resultsData).forEach(modelData => {
+            if (modelData.clean && modelData.clean.per_category_ap) {
+                Object.keys(modelData.clean.per_category_ap).forEach(catId => {
+                    categories.add(parseInt(catId));
+                });
+            }
+        });
+        
+        // Sort categories and add to selector
+        Array.from(categories).sort((a, b) => a - b).forEach(catId => {
+            const option = document.createElement('option');
+            option.value = catId;
+            option.textContent = categoryNames[catId] || `Category ${catId}`;
+            selector.appendChild(option);
+        });
+    });
+    
+    // Store chart instances globally to destroy them when updating
+    let chartInstances = {};
+    
+    function updateTableByCategory() {
+        const categoryId = document.getElementById('category-selector').value;
+        const isOverall = categoryId === 'overall';
+        
+        // Update headers
+        document.getElementById('clean-map-header').textContent = 
+            isOverall ? 'Clean mAP' : `Clean AP (${categoryNames[categoryId] || categoryId})`;
+        document.getElementById('avg-corrupted-header').textContent = 
+            isOverall ? 'Average Corrupted mAP' : `Avg Corrupted AP (${categoryNames[categoryId] || categoryId})`;
+        
+        // Update table rows
+        Object.keys(resultsData).forEach(modelKey => {
+            const modelData = resultsData[modelKey];
+            const row = document.querySelector(`tr[data-model-key="${modelKey}"]`);
+            if (!row) return;
+            
+            let cleanMetric, corruptedMetrics = [];
+            
+            if (isOverall) {
+                // Overall mAP
+                cleanMetric = modelData.clean.mAP || 0;
+                
+                // Collect all corrupted mAPs
+                if (modelData.corrupted) {
+                    Object.values(modelData.corrupted).forEach(severities => {
+                        Object.values(severities).forEach(metrics => {
+                            corruptedMetrics.push(metrics.mAP || 0);
+                        });
+                    });
+                }
+            } else {
+                // Category-specific AP
+                const catId = parseInt(categoryId);
+                cleanMetric = (modelData.clean.per_category_ap && modelData.clean.per_category_ap[catId]) || 0;
+                
+                // Collect corrupted APs for this category
+                if (modelData.corrupted) {
+                    Object.values(modelData.corrupted).forEach(severities => {
+                        Object.values(severities).forEach(metrics => {
+                            if (metrics.per_category_ap && metrics.per_category_ap[catId] !== undefined) {
+                                corruptedMetrics.push(metrics.per_category_ap[catId]);
+                            }
+                        });
+                    });
+                }
+            }
+            
+            // Calculate averages
+            const avgCorrupted = corruptedMetrics.length > 0 
+                ? corruptedMetrics.reduce((a, b) => a + b, 0) / corruptedMetrics.length 
+                : 0;
+            const degradation = cleanMetric - avgCorrupted;
+            const robustness = cleanMetric > 0 ? (avgCorrupted / cleanMetric * 100) : 0;
+            
+            // Update cells
+            row.querySelector('.clean-map-cell').textContent = cleanMetric.toFixed(3);
+            row.querySelector('.avg-corrupted-cell').textContent = 
+                corruptedMetrics.length > 0 ? avgCorrupted.toFixed(3) : 'N/A';
+            row.querySelector('.degradation-cell').innerHTML = 
+                corruptedMetrics.length > 0 ? `<span class="degradation">${degradation.toFixed(3)}</span>` : 'N/A';
+            row.querySelector('.robustness-cell').innerHTML = 
+                corruptedMetrics.length > 0 ? `<span class="robustness-score">${robustness.toFixed(1)}%</span>` : 'N/A';
+        });
+        
+        // Regenerate charts with category-specific data
+        regenerateCharts(categoryId, isOverall);
+    }
+    
+    function regenerateCharts(categoryId, isOverall) {
+        // Destroy existing charts
+        Object.values(chartInstances).forEach(chart => chart.destroy());
+        chartInstances = {};
+        
+        // Clear plots container
+        const container = document.getElementById('plots-container');
+        container.innerHTML = '';
+        
+        // Collect all corruptions from results
+        const allCorruptions = new Set();
+        Object.values(resultsData).forEach(modelData => {
+            if (modelData.corrupted) {
+                Object.keys(modelData.corrupted).forEach(corruption => {
+                    allCorruptions.add(corruption);
+                });
+            }
+        });
+        
+        // Generate plot data for each corruption
+        allCorruptions.forEach((corruption, index) => {
+            const plotDataForCorruption = {
+                labels: [0, 1, 2, 3, 4, 5],
+                datasets: []
+            };
+            
+            Object.keys(resultsData).forEach(modelKey => {
+                const modelData = resultsData[modelKey];
+                const modelName = modelData.name;
+                
+                if (modelData.corrupted && modelData.corrupted[corruption]) {
+                    const severitiesData = modelData.corrupted[corruption];
+                    const mAPValues = [];
+                    
+                    // Add clean metric as severity 0
+                    if (isOverall) {
+                        mAPValues.push(modelData.clean.mAP || null);
+                    } else {
+                        const catId = parseInt(categoryId);
+                        const cleanAP = (modelData.clean.per_category_ap && modelData.clean.per_category_ap[catId]) || null;
+                        mAPValues.push(cleanAP);
+                    }
+                    
+                    // Add corrupted severities 1-5
+                    for (let severity = 1; severity <= 5; severity++) {
+                        const severityKey = String(severity);
+                        if (severitiesData[severityKey]) {
+                            if (isOverall) {
+                                mAPValues.push(severitiesData[severityKey].mAP || null);
+                            } else {
+                                const catId = parseInt(categoryId);
+                                const ap = (severitiesData[severityKey].per_category_ap && 
+                                           severitiesData[severityKey].per_category_ap[catId]) || null;
+                                mAPValues.push(ap);
+                            }
+                        } else {
+                            mAPValues.push(null);
+                        }
+                    }
+                    
+                    plotDataForCorruption.datasets.push({
+                        label: modelName,
+                        data: mAPValues
+                    });
+                }
+            });
+            
+            if (plotDataForCorruption.datasets.length > 0) {
+                createPlot(corruption, plotDataForCorruption, index);
+            }
+        });
+    }
     
     // Color palette for different models
     const colors = [
@@ -129,7 +308,7 @@
             spanGaps: false
         }));
         
-        new Chart(canvas, {
+        const chart = new Chart(canvas, {
             type: 'line',
             data: {
                 labels: data.labels,
@@ -200,9 +379,12 @@
                 }
             }
         });
+        
+        // Store chart instance
+        chartInstances[corruption] = chart;
     }
     
-    // Create all plots
+    // Create all plots initially
     Object.keys(plotData).forEach((corruption, index) => {
         createPlot(corruption, plotData[corruption], index);
     });
@@ -213,6 +395,39 @@
 </script>
 
 <style>
+    .category-selector-container {
+        margin: 20px 0;
+        padding: 15px;
+        background: #f0f4ff;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        flex-wrap: wrap;
+    }
+    
+    .category-selector-container label {
+        font-size: 1rem;
+        color: #333;
+        margin: 0;
+    }
+    
+    #category-selector {
+        padding: 8px 12px;
+        border: 2px solid #667eea;
+        border-radius: 6px;
+        font-size: 1rem;
+        background: white;
+        cursor: pointer;
+        min-width: 200px;
+    }
+    
+    #category-selector:focus {
+        outline: none;
+        border-color: #5568d3;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+    
     .results-table-container {
         overflow-x: auto;
         margin: 20px 0;

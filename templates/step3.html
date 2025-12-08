@@ -22,10 +22,10 @@
                 {% for detector in detectors %}
                 <li>{{ detector }}</li>
                 {% endfor %}
-                {% if custom_detector %}
-                <li>Custom Model: {{ custom_detector.split('/')[-1] }}</li>
+                {% if custom_detector_hf %}
+                <li>Custom Model (HuggingFace): {{ custom_detector_hf }}</li>
                 {% endif %}
-                {% if not detectors and not custom_detector %}
+                {% if not detectors and not custom_detector_hf %}
                 <li class="text-warning">No detectors selected</li>
                 {% endif %}
             </ul>

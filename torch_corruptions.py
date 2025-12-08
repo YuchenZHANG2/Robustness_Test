@@ -456,6 +456,116 @@ class TorchCorruptions:
         
         return torch.clamp(result, 0, 1)
     
+    def dust(self, x, severity=1, dust_image_dir=None):
+        """
+        Apply dust effect using real dusty images from Construction dataset.
+        Uses cv2.addWeighted to blend clean and dusty images.
+        
+        Args:
+            x: Input tensor (B, C, H, W)
+            severity: Severity level (1-5)
+            dust_image_dir: Path to directory containing dusty images
+        
+        Returns:
+            Dusted tensor (B, C, H, W)
+        """
+        # Severity determines blend weight
+        # severity 1: 20% dust, severity 5: 100% dust
+        alpha_values = [0.2, 0.4, 0.6, 0.8, 1.0]
+        alpha = alpha_values[severity - 1]
+        beta = 1.0 - alpha
+        
+        # If dust_image_dir is provided and images are cached, use them
+        # Otherwise, generate procedural dust effect
+        if hasattr(self, '_dust_cache') and self._dust_cache is not None:
+            B, C, H, W = x.shape
+            dust_images = []
+            
+            for i in range(B):
+                # Get a random dust image from cache or use procedural
+                if len(self._dust_cache) > 0:
+                    dust_idx = torch.randint(len(self._dust_cache), (1,)).item()
+                    dust_img = self._dust_cache[dust_idx]
+                    
+                    # Resize to match input size
+                    if dust_img.shape[1:] != (H, W):
+                        dust_img = F.interpolate(dust_img.unsqueeze(0), size=(H, W), 
+                                                mode='bilinear', align_corners=False).squeeze(0)
+                    dust_images.append(dust_img)
+                else:
+                    # Fallback to procedural
+                    dust_images.append(self._generate_procedural_dust(H, W))
+            
+            dust_tensor = torch.stack(dust_images, dim=0).to(self.device)
+        else:
+            # Generate procedural dust effect
+            B, C, H, W = x.shape
+            dust_images = [self._generate_procedural_dust(H, W) for _ in range(B)]
+            dust_tensor = torch.stack(dust_images, dim=0).to(self.device)
+        
+        # Blend using weighted average (like cv2.addWeighted)
+        # result = alpha * dust + beta * clean
+        result = alpha * dust_tensor + beta * x
+        
+        return torch.clamp(result, 0, 1)
+    
+    def _generate_procedural_dust(self, H, W):
+        """Generate procedural dust effect as fallback."""
+        # Create yellowish/brownish dust overlay
+        dust = torch.ones((3, H, W), device=self.device)
+        
+        # Add some noise/texture
+        noise = torch.randn((1, H, W), device=self.device) * 0.1 + 0.7
+        noise = torch.clamp(noise, 0, 1)
+        
+        # Make it yellowish-brown
+        dust[0] = noise.squeeze() * 0.9  # R - more red
+        dust[1] = noise.squeeze() * 0.8  # G - medium green
+        dust[2] = noise.squeeze() * 0.6  # B - less blue
+        
+        return dust
+    
+    def load_dust_images_for_batch(self, clean_image_paths, dust_dir):
+        """
+        Load corresponding dusty images for a batch of clean images.
+        Matches by first 7 digits of filename.
+        
+        Args:
+            clean_image_paths: List of paths to clean images
+            dust_dir: Directory containing dusty test images
+        
+        Returns:
+            List of tensors for dusty images (C, H, W)
+        """
+        import cv2
+        from pathlib import Path
+        
+        dust_dir = Path(dust_dir)
+        dust_images = []
+        
+        for clean_path in clean_image_paths:
+            clean_filename = Path(clean_path).name
+            # Extract first 7 digits
+            prefix = clean_filename[:7]
+            
+            # Find matching dusty image
+            matching_files = list(dust_dir.glob(f"{prefix}*"))
+            
+            if matching_files:
+                # Load the dusty image
+                dust_path = matching_files[0]
+                dust_img = cv2.imread(str(dust_path))
+                dust_img = cv2.cvtColor(dust_img, cv2.COLOR_BGR2RGB)
+                
+                # Convert to tensor (C, H, W) in [0, 1]
+                dust_tensor = torch.from_numpy(dust_img).float().permute(2, 0, 1) / 255.0
+                dust_images.append(dust_tensor.to(self.device))
+            else:
+                # No matching dusty image found, return None
+                dust_images.append(None)
+        
+        return dust_images
+    
     def spatter(self, x, severity=1):
         """Apply spatter effect."""
         # Simplified spatter using random blobs

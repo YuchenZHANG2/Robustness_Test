@@ -50,22 +50,47 @@ DATASET_CONFIG = {
 # Global evaluator (will be set by user selection)
 evaluator = None
 
+# ============================================================================
+# DEBUG: Set to True to test with ALL images, False for random 50 images
+# ============================================================================
+USE_ALL_IMAGES = False  # Change to True for full dataset testing
+# ============================================================================
+
 # Predefined detector models
 # Maps display name -> (model_config_key, full_name)
 PREDEFINED_DETECTORS = {
-    'frcnn_v2': 'Faster R-CNN',
-    'retinanet_v2': 'RetinaNet',
+    'frcnn_v2': 'Faster R-CNN V2',
+    'retinanet_v2': 'RetinaNet V2',
     'fcos_v1': 'FCOS',
+    'ssd300': 'SSD 300',
+    'yolov11': 'YOLO11',
     'detr': 'DETR',
     'rt_detr': 'RT-DETR',
+}
+
+# Additional models (shown under "More Models" button)
+ADDITIONAL_DETECTORS = {
+    'frcnn_v1': 'Faster R-CNN V1',
+    'frcnn_mobilenet_large': 'Faster R-CNN MobileNet Large',
+    'frcnn_mobilenet_320': 'Faster R-CNN MobileNet 320',
+    'retinanet_v1': 'RetinaNet V1',
+    'ssdlite_320': 'SSDLite320 MobileNet',
+    'deformable_detr': 'Deformable DETR',
+    'conditional_detr': 'Conditional DETR',
+    'dab_detr': 'DAB-DETR',
 }
 
 # Corruption categories
 CORRUPTIONS = {
     'Noise': ['gaussian_noise', 'shot_noise', 'impulse_noise'],
     'Blur': ['defocus_blur', 'glass_blur', 'motion_blur', 'zoom_blur'],
-    'Weather': ['snow', 'frost', 'fog', 'brightness'],
+    'Weather': ['snow', 'frost', 'fog', 'brightness', 'dust'],
     'Digital': ['contrast', 'elastic_transform', 'pixelate', 'jpeg_compression']
+}
+
+# Dataset-specific corruptions
+DATASET_SPECIFIC_CORRUPTIONS = {
+    'dust': ['Construction']  # dust is only available for Construction dataset
 }
 
 
@@ -91,23 +116,18 @@ def step1():
         # Get selected predefined detectors
         selected_detectors = request.form.getlist('detectors')
         
-        # Handle custom detector upload
-        custom_detector = None
-        if 'custom_detector' in request.files:
-            file = request.files['custom_detector']
-            if file and file.filename:
-                filename = secure_filename(file.filename)
-                filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                file.save(filepath)
-                custom_detector = filepath
+        # Handle custom HuggingFace detector
+        custom_detector_hf = request.form.get('custom_detector_hf', '').strip()
         
         # Store in session
         session['selected_detectors'] = selected_detectors
-        session['custom_detector'] = custom_detector
+        session['custom_detector_hf'] = custom_detector_hf if custom_detector_hf else None
         
         return redirect(url_for('step2'))
     
-    return render_template('step1.html', detectors=PREDEFINED_DETECTORS)
+    return render_template('step1.html', 
+                         detectors=PREDEFINED_DETECTORS,
+                         additional_detectors=ADDITIONAL_DETECTORS)
 
 
 @app.route('/step2', methods=['GET', 'POST'])
@@ -147,7 +167,8 @@ def step2():
             return redirect(url_for('step3'))
     
     return render_template('step2.html', 
-                         corruptions=CORRUPTIONS, 
+                         corruptions=CORRUPTIONS,
+                         dataset_specific_corruptions=DATASET_SPECIFIC_CORRUPTIONS,
                          datasets=DATASET_CONFIG, 
                          selected_dataset=None,
                          show_preview=False)
@@ -165,68 +186,83 @@ def step3():
             # Get report preference
             generate_pdf = request.form.get('report_type') == 'pdf'
             session['generate_pdf'] = generate_pdf
-            
-            # Here you would start the actual testing process
-            # For now, redirect to a results page
             return redirect(url_for('results'))
     
     # Get summary of selections
     detector_keys = session.get('selected_detectors', [])
     # Map keys to human-readable names
     detector_names = [PREDEFINED_DETECTORS.get(key, key) for key in detector_keys]
-    custom_detector = session.get('custom_detector')
+    custom_detector_hf = session.get('custom_detector_hf')
     corruptions = session.get('selected_corruptions', [])
     
     return render_template('step3.html', 
                          detectors=detector_names,
-                         custom_detector=custom_detector,
+                         custom_detector_hf=custom_detector_hf,
                          corruptions=corruptions)
 
 
 @app.route('/results')
 def results():
-    """Start the testing process and show validation"""
+    """Start the testing process"""
     model_keys = session.get('selected_detectors', [])
+    custom_detector_hf = session.get('custom_detector_hf')
     corruptions = session.get('selected_corruptions', [])
     generate_pdf = session.get('generate_pdf', False)
     
-    if not model_keys:
+    if not model_keys and not custom_detector_hf:
         return redirect(url_for('step1'))
     
-    # Get 50 random images for testing
-    image_ids = evaluator.get_random_images(n=50)
+    # Get images based on USE_ALL_IMAGES debug flag
+    if USE_ALL_IMAGES:
+        image_ids = evaluator.get_all_images()
+        print(f"DEBUG: Using ALL {len(image_ids)} images from dataset")
+    else:
+        image_ids = evaluator.get_random_images(n=50)
+        print(f"DEBUG: Using random sample of {len(image_ids)} images")
+    
     session['test_image_ids'] = image_ids
-    session['current_validation_model_idx'] = 0
-    session['validation_approved'] = []
     
-    return redirect(url_for('validate_model'))
-
-
-@app.route('/validate_model')
-def validate_model():
-    """Show prediction validation for current model"""
-    model_keys = session.get('selected_detectors', [])
-    current_idx = session.get('current_validation_model_idx', 0)
-    
-    if current_idx >= len(model_keys):
-        # All models validated, start testing
+    # If custom detector exists, show optional validation, otherwise go straight to testing
+    if custom_detector_hf:
+        return render_template('validate_model.html',
+                             has_custom_detector=True,
+                             custom_detector_hf=custom_detector_hf)
+    else:
         return redirect(url_for('run_testing'))
-    
-    model_key = model_keys[current_idx]
-    model_name = MODEL_CONFIGS[model_key]['name']
-    
-    return render_template('validate_model.html',
-                         model_key=model_key,
-                         model_name=model_name,
-                         current=current_idx + 1,
-                         total=len(model_keys))
 
 
-@app.route('/load_and_predict/<model_key>')
-def load_and_predict(model_key):
-    """Load model and make prediction on sample image"""
+@app.route('/load_and_predict_custom')
+def load_and_predict_custom():
+    """Load custom HuggingFace model and make prediction on sample image"""
     try:
-        model_loader.load_model(model_key)
+        custom_detector_hf = session.get('custom_detector_hf')
+        if not custom_detector_hf:
+            return jsonify({'success': False, 'error': 'No custom detector configured'}), 400
+        
+        # Add custom model to MODEL_CONFIGS temporarily
+        custom_key = 'custom_hf_preview'
+        # Auto-detect if it's an Ultralytics/YOLO model
+        # Check for: 'ultra', 'yolo', '.pt' extension, or 'Ultralytics/' prefix
+        is_yolo = (
+            'ultra' in custom_detector_hf.lower() or 
+            'yolo' in custom_detector_hf.lower() or 
+            custom_detector_hf.endswith('.pt')
+        )
+        
+        if is_yolo:
+            MODEL_CONFIGS[custom_key] = {
+                "name": f"Custom YOLO: {custom_detector_hf}",
+                "type": "ultralytics",
+                "model_name": custom_detector_hf
+            }
+        else:
+            MODEL_CONFIGS[custom_key] = {
+                "name": f"Custom HF: {custom_detector_hf}",
+                "type": "huggingface",
+                "hf_model_id": custom_detector_hf
+            }
+        
+        model_loader.load_model(custom_key)
         
         # Get a random test image
         image_ids = session.get('test_image_ids', [])
@@ -240,13 +276,13 @@ def load_and_predict(model_key):
         image = Image.open(img_path).convert('RGB')
         
         # Get predictions
-        predictions = model_loader.predict(model_key, image, score_threshold=0.3)
+        predictions = model_loader.predict(custom_key, image, score_threshold=0.3)
         
         # Visualize
         fig = visualize_predictions(
             image, predictions, format_coco_label_mapping(),
             score_threshold=0.3,
-            title=f"{MODEL_CONFIGS[model_key]['name']} - Sample Prediction"
+            title=f"{custom_detector_hf} - Sample Prediction"
         )
         
         # Convert to base64 for web display
@@ -256,21 +292,11 @@ def load_and_predict(model_key):
             'success': True,
             'image': f'data:image/png;base64,{img_base64}',
             'num_detections': len(predictions['boxes']),
-            'model_name': MODEL_CONFIGS[model_key]['name']
+            'model_name': custom_detector_hf
         })
         
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
-
-
-@app.route('/approve_model/<model_key>', methods=['POST'])
-def approve_model(model_key):
-    """User approves the model predictions"""
-    approved = session.get('validation_approved', [])
-    approved.append(model_key)
-    session['validation_approved'] = approved
-    session['current_validation_model_idx'] = session.get('current_validation_model_idx', 0) + 1
-    return jsonify({'success': True})
 
 
 @app.route('/run_testing')
@@ -283,8 +309,34 @@ def run_testing():
 def execute_test():
     """Execute the robustness test in background thread"""
     model_keys = session.get('selected_detectors', [])
+    custom_detector_hf = session.get('custom_detector_hf')
     corruptions = session.get('selected_corruptions', [])
     image_ids = session.get('test_image_ids', [])
+    
+    # Add custom HuggingFace model to MODEL_CONFIGS if provided
+    if custom_detector_hf:
+        custom_key = 'custom_hf'
+        # Auto-detect if it's an Ultralytics/YOLO model
+        # Check for: 'ultra', 'yolo', '.pt' extension, or 'Ultralytics/' prefix
+        is_yolo = (
+            'ultra' in custom_detector_hf.lower() or 
+            'yolo' in custom_detector_hf.lower() or 
+            custom_detector_hf.endswith('.pt')
+        )
+        
+        if is_yolo:
+            MODEL_CONFIGS[custom_key] = {
+                "name": f"Custom YOLO: {custom_detector_hf}",
+                "type": "ultralytics",
+                "model_name": custom_detector_hf
+            }
+        else:
+            MODEL_CONFIGS[custom_key] = {
+                "name": f"Custom HF: {custom_detector_hf}",
+                "type": "huggingface",
+                "hf_model_id": custom_detector_hf
+            }
+        model_keys.append(custom_key)
     
     def run_test_background():
         """Background function to run the test"""
@@ -353,10 +405,23 @@ def show_results():
     with open('static/test_results.json', 'r') as f:
         results = json.load(f)
     
-    # Generate plot data for each corruption
-    plot_data = generate_corruption_plots(results)
+    # Sort results by clean mAP in descending order
+    sorted_results = dict(sorted(
+        results.items(),
+        key=lambda x: x[1].get('clean', {}).get('mAP', 0),
+        reverse=True
+    ))
     
-    return render_template('show_results.html', results=results, plot_data=plot_data)
+    # Generate plot data for each corruption
+    plot_data = generate_corruption_plots(sorted_results)
+    
+    # Get category names from evaluator
+    category_names = evaluator.get_category_names() if evaluator else {}
+    
+    return render_template('show_results.html', 
+                         results=sorted_results, 
+                         plot_data=plot_data,
+                         category_names=json.dumps(category_names))
 
 
 def generate_corruption_plots(results):

@@ -24,16 +24,31 @@
                 </div>
                 {% endfor %}
             </div>
+            
+            <div class="more-models-section">
+                <button type="button" class="btn-toggle-models" id="toggleMoreModels">
+                    <span class="toggle-icon">▶</span> More Models
+                </button>
+                <div class="additional-models" id="additionalModels" style="display: none;">
+                    <div class="detector-grid">
+                        {% for detector_key, detector_name in additional_detectors.items() %}
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="{{ detector_key }}" name="detectors" value="{{ detector_key }}">
+                            <label for="{{ detector_key }}">{{ detector_name }}</label>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
         </div>
         
         <div class="section">
             <h3>Custom Detector (Optional)</h3>
-            <div class="file-upload">
-                <label for="custom_detector" class="file-label">
-                    <span class="file-text">Choose a model file...</span>
-                    <input type="file" id="custom_detector" name="custom_detector" accept=".pt,.pth,.pkl,.onnx">
-                </label>
-                <p class="help-text">Supported formats: .pt, .pth, .pkl, .onnx</p>
+            <div class="form-group">
+                <label for="custom_detector_hf">HuggingFace Model ID:</label>
+                <input type="text" id="custom_detector_hf" name="custom_detector_hf" 
+                       placeholder="e.g., facebook/detr-resnet-50" class="text-input">
+                <p class="help-text">Enter a HuggingFace model ID for object detection (e.g., facebook/detr-resnet-50, microsoft/conditional-detr-resnet-50)</p>
             </div>
         </div>
         
@@ -46,10 +61,16 @@
 
 {% block scripts %}
 <script>
-const fileInput = document.getElementById('custom_detector');
-const fileText = document.querySelector('.file-text');
-fileInput.addEventListener('change', e => {
-    fileText.textContent = e.target.files[0]?.name || 'Choose a model file...';
+// Toggle More Models section
+const toggleBtn = document.getElementById('toggleMoreModels');
+const additionalModels = document.getElementById('additionalModels');
+const toggleIcon = toggleBtn.querySelector('.toggle-icon');
+
+toggleBtn.addEventListener('click', () => {
+    const isHidden = additionalModels.style.display === 'none';
+    additionalModels.style.display = isHidden ? 'block' : 'none';
+    toggleIcon.textContent = isHidden ? '▼' : '▶';
+    toggleBtn.innerHTML = `<span class="toggle-icon">${toggleIcon.textContent}</span> ${isHidden ? 'Hide Additional Models' : 'More Models'}`;
 });
 </script>
 {% endblock %}

@@ -2,13 +2,18 @@
 
 {% block content %}
 <div class="step-container">
-    <h2>Model Validation ({{ current }}/{{ total }})</h2>
-    <p class="step-description">Please verify that {{ model_name }} is detecting objects correctly before proceeding with the full test.</p>
+    <h2>Custom Model Preview (Optional)</h2>
+    <p class="step-description">You can optionally preview a sample prediction from your custom HuggingFace model: <strong>{{ custom_detector_hf }}</strong></p>
     
     <div class="section">
-        <div id="loading-section">
+        <div class="button-group" style="margin-bottom: 20px;">
+            <button onclick="skipPreview()" class="btn btn-primary btn-large">Skip Preview - Start Testing</button>
+            <button onclick="loadPreview()" class="btn btn-secondary">Load Sample Prediction</button>
+        </div>
+        
+        <div id="loading-section" style="display: none;">
             <div class="loader"></div>
-            <p class="loading-text">Loading {{ model_name }}...</p>
+            <p class="loading-text">Loading custom model...</p>
             <div class="progress-container">
                 <div class="progress-bar-fill" id="load-progress"></div>
             </div>
@@ -16,7 +21,7 @@
         
         <div id="prediction-section" style="display: none;">
             <h3>Sample Prediction</h3>
-            <p class="help-text">Please check if the object classes and bounding boxes look correct.</p>
+            <p class="help-text">This is a sample prediction to verify the model is working correctly.</p>
             
             <div class="prediction-image-container">
                 <img id="prediction-image" src="" alt="Prediction Visualization" class="validation-image">
@@ -27,8 +32,7 @@
             </div>
             
             <div class="button-group">
-                <button onclick="rejectModel()" class="btn btn-secondary">Go Back to Model Selection</button>
-                <button onclick="approveModel()" class="btn btn-success btn-large">✓ Looks Good - Continue</button>
+                <button onclick="skipPreview()" class="btn btn-success btn-large">Continue to Testing →</button>
             </div>
         </div>
         
@@ -36,7 +40,8 @@
             <div class="error-message">
                 <h3>Error Loading Model</h3>
                 <p id="error-text"></p>
-                <button onclick="location.reload()" class="btn btn-primary">Retry</button>
+                <button onclick="loadPreview()" class="btn btn-primary">Retry</button>
+                <button onclick="skipPreview()" class="btn btn-secondary">Skip and Continue</button>
             </div>
         </div>
     </div>
@@ -45,7 +50,6 @@
 
 {% block scripts %}
 <script>
-const modelKey = "{{ model_key }}";
 const sections = {
     loading: document.getElementById('loading-section'),
     prediction: document.getElementById('prediction-section'),
@@ -54,11 +58,13 @@ const sections = {
 
 function showSection(name) {
     Object.values(sections).forEach(s => s.style.display = 'none');
-    sections[name].style.display = 'block';
+    if (name) sections[name].style.display = 'block';
 }
 
-window.onload = () => {
-    fetch(`/load_and_predict/${modelKey}`)
+function loadPreview() {
+    showSection('loading');
+    
+    fetch('/load_and_predict_custom')
         .then(res => res.json())
         .then(data => {
             if (data.success) {
@@ -74,16 +80,10 @@ window.onload = () => {
             document.getElementById('error-text').textContent = error.toString();
             showSection('error');
         });
-};
-
-function approveModel() {
-    fetch(`/approve_model/${modelKey}`, {method: 'POST'})
-        .then(res => res.json())
-        .then(data => data.success && (window.location.href = '/validate_model'));
 }
 
-function rejectModel() {
-    confirm('Are you sure you want to go back and reselect models?') && (window.location.href = '/step1');
+function skipPreview() {
+    window.location.href = '/run_testing';
 }
 </script>
 
@@ -152,16 +152,21 @@ function rejectModel() {
     }
     
     .error-message {
-        background: #ffebee;
-        border: 2px solid #ef5350;
-        border-radius: 8px;
+        background: #ffe0e0;
         padding: 30px;
+        border-radius: 8px;
         text-align: center;
+        border: 2px solid #ff6b6b;
     }
     
     .error-message h3 {
-        color: #c62828;
+        color: #d63031;
         margin-bottom: 15px;
+    }
+    
+    .error-message p {
+        color: #2d3748;
+        margin: 15px 0;
     }
 </style>
 {% endblock %}

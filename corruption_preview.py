@@ -85,7 +85,17 @@ def generate_preview(corruption_names, severity=3, output_dir='static/previews')
     for idx, corruption_name in enumerate(corruption_names, start=1):
         if idx < len(axes):
             try:
-                corrupted = corruptor.corrupt(image, corruption_name=corruption_name, severity=severity)
+                # Special handling for dust corruption - use pre-generated dust image
+                if corruption_name == 'dust':
+                    dust_path = Path('showcase_dust.jpg')
+                    if dust_path.exists():
+                        corrupted = np.array(Image.open(dust_path).convert('RGB'))
+                    else:
+                        # Fallback to procedural generation
+                        corrupted = corruptor.corrupt(image, corruption_name=corruption_name, severity=severity)
+                else:
+                    corrupted = corruptor.corrupt(image, corruption_name=corruption_name, severity=severity)
+                
                 axes[idx].imshow(corrupted)
                 # Format title: replace underscores and capitalize
                 title = corruption_name.replace('_', ' ').title()

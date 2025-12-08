@@ -48,14 +48,23 @@
             
             <div class="checkbox-grid">
                 {% for corruption in corruption_list %}
-                <div class="checkbox-item">
+                <div class="checkbox-item" 
+                     {% if corruption in dataset_specific_corruptions %}
+                     data-corruption="{{ corruption }}"
+                     data-datasets="{{ dataset_specific_corruptions[corruption]|join(',') }}"
+                     {% endif %}>
                     <input type="checkbox" 
                            id="{{ corruption }}" 
                            name="{{ corruption }}" 
                            value="{{ corruption }}"
-                           class="corruption-checkbox category-{{ category }}"
+                           class="corruption-checkbox category-{{ category }} {% if corruption in dataset_specific_corruptions %}dataset-specific{% endif %}"
                            {% if selected_corruptions and corruption in selected_corruptions %}checked{% endif %}>
-                    <label for="{{ corruption }}">{{ corruption.replace('_', ' ').title() }}</label>
+                    <label for="{{ corruption }}" 
+                           {% if corruption in dataset_specific_corruptions %}
+                           title="Only available for {{ dataset_specific_corruptions[corruption]|join(', ') }} dataset"
+                           {% endif %}>
+                        {{ corruption.replace('_', ' ').title() }}
+                    </label>
                 </div>
                 {% endfor %}
             </div>
@@ -84,12 +93,43 @@
 
 {% block scripts %}
 <script>
+// Handle dataset-specific corruptions
+function updateDatasetSpecificCorruptions() {
+    const selectedDataset = document.querySelector('input[name="dataset"]:checked')?.value;
+    
+    document.querySelectorAll('.dataset-specific').forEach(checkbox => {
+        const item = checkbox.closest('.checkbox-item');
+        const allowedDatasets = item.dataset.datasets?.split(',') || [];
+        
+        if (selectedDataset && !allowedDatasets.includes(selectedDataset)) {
+            checkbox.disabled = true;
+            checkbox.checked = false;
+            item.classList.add('disabled-corruption');
+            item.title = `Only available for ${allowedDatasets.join(', ')} dataset`;
+        } else {
+            checkbox.disabled = false;
+            item.classList.remove('disabled-corruption');
+            item.title = '';
+        }
+    });
+}
+
+// Update on dataset change
+document.querySelectorAll('input[name="dataset"]').forEach(radio => {
+    radio.addEventListener('change', updateDatasetSpecificCorruptions);
+});
+
+// Initialize on page load
+updateDatasetSpecificCorruptions();
+
 // Select All / Deselect All functionality
 document.querySelectorAll('.select-all, .deselect-all').forEach(btn => {
     btn.addEventListener('click', function() {
         const checked = this.classList.contains('select-all');
         document.querySelectorAll(`.category-${this.dataset.category}`).forEach(cb => {
-            cb.checked = checked;
+            if (!cb.disabled) {  // Only toggle enabled checkboxes
+                cb.checked = checked;
+            }
         });
     });
 });

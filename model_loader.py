@@ -86,9 +86,14 @@ MODEL_CONFIGS = {
         "hf_model_id": "IDEA-Research/dab-detr-resnet-50"
     },
     "rt_detr": {
-        "name": "RT-DETR R101",
+        "name": "RT-DETR",
         "type": "huggingface",
-        "hf_model_id": "PekingU/rtdetr_r101vd"
+        "hf_model_id": "PekingU/rtdetr_r50vd"
+    },
+    "yolov11": {
+        "name": "YOLO11",
+        "type": "ultralytics",
+        "model_name": "yolo11m.pt"  # medium version for better accuracy
     },
 }
 
@@ -126,6 +131,8 @@ class ModelLoader:
             model = self._load_torchvision_model(config, progress_callback)
         elif config['type'] == 'huggingface':
             model = self._load_huggingface_model(config, progress_callback)
+        elif config['type'] == 'ultralytics':
+            model = self._load_ultralytics_model(config, progress_callback)
         else:
             raise ValueError(f"Unknown model type: {config['type']}")
         
@@ -164,6 +171,27 @@ class ModelLoader:
         model = AutoModelForObjectDetection.from_pretrained(config['hf_model_id'])
         model = model.to(self.device)
         model.eval()
+        
+        return model
+    
+    def _load_ultralytics_model(self, config, progress_callback=None):
+        """Load an Ultralytics YOLO model."""
+        try:
+            from ultralytics import YOLO
+        except ImportError:
+            raise ImportError(
+                "ultralytics package is required for YOLO models. "
+                "Install it with: pip install ultralytics"
+            )
+        
+        if progress_callback:
+            progress_callback(1, 3, "Loading YOLO model...")
+        
+        # YOLO models are loaded directly from model name
+        model = YOLO(config['model_name'])
+        
+        if progress_callback:
+            progress_callback(2, 3, "Model ready...")
         
         return model
     
@@ -232,10 +260,51 @@ class ModelLoader:
             threshold=score_threshold
         )[0]
         
+        # Only RT-DETR uses contiguous 0-79 labels, other DETR models use standard COCO 1-90
+        labels = results['labels'].cpu().numpy()
+        if 'rtdetr' in config['hf_model_id'].lower():
+            from evaluator import get_rtdetr_to_coco_mapping
+            rtdetr_to_coco = get_rtdetr_to_coco_mapping()
+            labels = np.array([rtdetr_to_coco.get(int(l), int(l)) for l in labels])
+        
         return {
             'boxes': results['boxes'].cpu().numpy(),
-            'labels': results['labels'].cpu().numpy(),
+            'labels': labels,
             'scores': results['scores'].cpu().numpy()
+        }
+    
+    def predict_ultralytics(self, model, image, score_threshold=0.5):
+        """
+        Run inference with an Ultralytics YOLO model.
+        
+        Args:
+            model: Ultralytics YOLO model
+            image: PIL Image or numpy array
+            score_threshold: Minimum confidence score
+        
+        Returns:
+            Dictionary with boxes, labels, scores
+        """
+        if isinstance(image, np.ndarray):
+            image = Image.fromarray(image)
+        
+        # Run inference - pass conf threshold to YOLO to get all detections
+        results = model(image, conf=score_threshold, verbose=False)[0]
+        
+        # Extract predictions
+        boxes = results.boxes
+        
+        # YOLO already filtered by score_threshold, no need to filter again
+        # YOLO uses 0-79 contiguous labels, need to map to COCO IDs (same as RT-DETR)
+        from evaluator import get_rtdetr_to_coco_mapping
+        yolo_to_coco = get_rtdetr_to_coco_mapping()
+        raw_labels = boxes.cls.cpu().numpy().astype(int)
+        labels = np.array([yolo_to_coco.get(int(l), int(l)) for l in raw_labels])
+        
+        return {
+            'boxes': boxes.xyxy.cpu().numpy(),
+            'labels': labels,
+            'scores': boxes.conf.cpu().numpy()
         }
     
     def predict(self, model_key, image, score_threshold=0.5):
@@ -257,6 +326,8 @@ class ModelLoader:
             return self.predict_torchvision(model, image, score_threshold)
         elif config['type'] == 'huggingface':
             return self.predict_huggingface(model_key, image, score_threshold)
+        elif config['type'] == 'ultralytics':
+            return self.predict_ultralytics(model, image, score_threshold)
         else:
             raise ValueError(f"Unknown model type: {config['type']}")
     

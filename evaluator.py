@@ -44,6 +44,15 @@ class COCOEvaluator:
         all_img_ids = self.coco_gt.getImgIds()
         return random.sample(all_img_ids, min(n, len(all_img_ids)))
     
+    def get_all_images(self):
+        """
+        Get all image IDs from the dataset.
+        
+        Returns:
+            List of all image IDs
+        """
+        return self.coco_gt.getImgIds()
+    
     def get_image_path(self, image_id):
         """Get the file path for an image ID."""
         img_info = self.coco_gt.loadImgs([image_id])[0]
@@ -88,8 +97,8 @@ class COCOEvaluator:
         coco_eval.accumulate()
         coco_eval.summarize()
         
-        # Extract key metrics
-        return {
+        # Extract overall metrics
+        results = {
             'mAP': coco_eval.stats[0],  # mAP @ IoU=0.50:0.95
             'mAP_50': coco_eval.stats[1],  # mAP @ IoU=0.50
             'mAP_75': coco_eval.stats[2],  # mAP @ IoU=0.75
@@ -97,6 +106,36 @@ class COCOEvaluator:
             'mAP_medium': coco_eval.stats[4],  # mAP for medium objects
             'mAP_large': coco_eval.stats[5],  # mAP for large objects
         }
+        
+        # Extract per-category AP using COCO's built-in computation
+        # The eval dict contains precision/recall per category
+        per_category_ap = {}
+        if coco_eval.eval is not None:
+            # Get precision array: shape (T, R, K, A, M)
+            # T=IoU thresholds, R=recall thresholds, K=categories, A=area ranges, M=max detections
+            precision = coco_eval.eval['precision']
+            
+            # Compute AP for each category using COCO's formula
+            # This matches what summarize() does but per category
+            for idx, cat_id in enumerate(coco_eval.params.catIds):
+                # Select precision for this category across all IoU, area, maxDet
+                # Shape: (T, R, A, M) -> we want to average over A and M, then compute AP over IoU and R
+                p = precision[:, :, idx, 0, 2]  # Use area='all' (idx=0) and maxDets=100 (idx=2)
+                
+                # Only use valid recall points (precision > -1)
+                p = p[p > -1]
+                
+                if p.size:
+                    # AP is mean over all valid precision values (averaged over IoU thresholds and recall)
+                    ap = np.mean(p)
+                else:
+                    ap = 0.0
+                
+                per_category_ap[int(cat_id)] = float(ap)
+        
+        results['per_category_ap'] = per_category_ap
+        
+        return results
     
     def convert_predictions_to_coco_format(self, model_predictions, image_id, 
                                           label_offset=0):
@@ -176,3 +215,24 @@ def format_coco_label_mapping():
         86: 'vase', 87: 'scissors', 88: 'teddy bear', 89: 'hair drier', 90: 'toothbrush'
     }
     return coco_names
+
+
+def get_rtdetr_to_coco_mapping():
+    """
+    RT-DETR uses contiguous 0-79 indexing, map to COCO's non-contiguous 1-90.
+    Note: Other DETR models (DETR, Deformable DETR, Conditional DETR, DAB-DETR) 
+    use standard COCO 1-90 labels and do NOT need this mapping.
+    
+    RT-DETR: 0=person, 1=bicycle, 2=car, 3=motorcycle, 4=airplane...
+    COCO:    1=person, 2=bicycle, 3=car, 4=motorcycle, 5=airplane...
+    """
+    # COCO label IDs in order (80 classes)
+    coco_ids = [
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 16, 17, 18, 19, 20,
+        21, 22, 23, 24, 25, 27, 28, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
+        41, 42, 43, 44, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58,
+        59, 60, 61, 62, 63, 64, 65, 67, 70, 72, 73, 74, 75, 76, 77, 78, 79,
+        80, 81, 82, 84, 85, 86, 87, 88, 89, 90
+    ]
+    # Map RT-DETR index (0-79) to COCO ID (1-90 with gaps)
+    return {i: coco_id for i, coco_id in enumerate(coco_ids)}

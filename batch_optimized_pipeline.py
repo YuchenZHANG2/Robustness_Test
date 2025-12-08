@@ -37,9 +37,11 @@ class COCODetectionDataset(Dataset):
         
         # Cache image info to avoid COCO object access in workers
         self.image_info = {}
+        self.image_paths = {}
         for img_id in image_ids:
             img_data = evaluator.coco_gt.loadImgs([img_id])[0]
             self.image_info[img_id] = img_data['file_name']
+            self.image_paths[img_id] = str(self.image_dir / img_data['file_name'])
     
     def __len__(self):
         return len(self.image_ids)
@@ -55,7 +57,8 @@ class COCODetectionDataset(Dataset):
         return {
             'image': image,
             'image_id': image_id,
-            'original_size': original_size
+            'original_size': original_size,
+            'image_path': str(img_path)
         }
 
 
@@ -68,6 +71,7 @@ def collate_fn(batch):
     
     images = [item['image'] for item in batch]
     image_ids = [item['image_id'] for item in batch]
+    image_paths = [item['image_path'] for item in batch]
     original_sizes = [item['original_size'] for item in batch]
     
     # Find largest dimensions in batch
@@ -113,6 +117,7 @@ def collate_fn(batch):
     return {
         'images': batch_tensor,  # (B, C, H, W) - padded and ready for corruption
         'image_ids': image_ids,
+        'image_paths': image_paths,
         'original_sizes': original_sizes,
         'transformations': transformations
     }
@@ -148,8 +153,27 @@ class BatchOptimizedRobustnessTest:
         print(f"Batch size: {batch_size}, Workers: {num_workers}")
         print(f"Batch-first approach: Corrupt once, test all models")
     
+    def _get_label_offset(self, model_key):
+        """
+        Get the correct label offset for converting predictions to COCO format.
+        
+        Args:
+            model_key: Model configuration key
+        
+        Returns:
+            Label offset (always 0 - all models already output COCO format)
+        """
+        # All models already output COCO-format labels (1-90):
+        # - Torchvision models output COCO labels directly
+        # - HuggingFace DETR models output COCO labels directly
+        # - RT-DETR gets converted using rtdetr_to_coco mapping in predict methods
+        # - YOLO gets converted using yolo_to_coco mapping (same as RT-DETR) in predict methods
+        return 0
+    
     def apply_batch_corruption(self, batch_tensor: torch.Tensor, 
-                               corruption_name: str, severity: int) -> torch.Tensor:
+                               corruption_name: str, severity: int,
+                               image_paths: List[str] = None,
+                               transformations: List[Dict] = None) -> torch.Tensor:
         """
         Apply corruption to a batch tensor on GPU.
         
@@ -157,11 +181,17 @@ class BatchOptimizedRobustnessTest:
             batch_tensor: Tensor of shape (B, C, H, W)
             corruption_name: Name of corruption to apply
             severity: Severity level (1-5)
+            image_paths: List of image paths (needed for dust corruption)
+            transformations: List of transformation dicts (needed for dust corruption)
         
         Returns:
             Corrupted tensor of same shape
         """
         batch_tensor = batch_tensor.to(self.device)
+        
+        # Special handling for dust corruption
+        if corruption_name == 'dust':
+            return self._apply_dust_corruption(batch_tensor, severity, image_paths, transformations)
         
         # Apply corruption to entire batch at once
         corrupted_tensor = self.corruptor.corrupt(
@@ -172,6 +202,107 @@ class BatchOptimizedRobustnessTest:
         )
         
         return corrupted_tensor
+    
+    def _apply_dust_corruption(self, batch_tensor: torch.Tensor, severity: int,
+                                image_paths: List[str],
+                                transformations: List[Dict]) -> torch.Tensor:
+        """
+        Apply dust corruption using real dusty images from Construction dataset.
+        
+        Args:
+            batch_tensor: Clean images tensor (B, C, H, W) - already resized and padded
+            severity: Severity level (1-5) determines blending ratio
+            image_paths: Paths to clean images
+            transformations: Transformation info to apply same resize+pad to dust images
+        
+        Returns:
+            Dusted tensor (B, C, H, W)
+        """
+        import cv2
+        from pathlib import Path
+        
+        # Severity determines blend weight: alpha * dust + (1-alpha) * clean
+        alpha_values = [0.2, 0.4, 0.6, 0.8, 1.0]
+        alpha = alpha_values[severity - 1]
+        beta = 1.0 - alpha
+        gamma = 0.0
+        
+        B, C, H, W = batch_tensor.shape
+        dusted_images = []
+        
+        # Dust directory (test folder)
+        dust_dir = Path(self.evaluator.image_dir).parent / 'test'
+        
+        for i in range(B):
+            clean_tensor = batch_tensor[i]  # (C, H, W) - already transformed (resized + padded)
+            
+            if image_paths and dust_dir.exists() and transformations:
+                # Get clean image filename and extract first 7 digits
+                clean_filename = Path(image_paths[i]).name
+                prefix = clean_filename[:7]
+                
+                # Find matching dusty image
+                matching_files = list(dust_dir.glob(f"{prefix}*"))
+                
+                if matching_files:
+                    # Load dusty image at original size
+                    dust_path = matching_files[0]
+                    dust_img = cv2.imread(str(dust_path))
+                    dust_img = cv2.cvtColor(dust_img, cv2.COLOR_BGR2RGB)
+                    dust_pil = Image.fromarray(dust_img)
+                    
+                    # Apply EXACT SAME transformations as clean image:
+                    # 1. Resize using the same scale factor
+                    # 2. Pad to match batch dimensions
+                    from torchvision import transforms
+                    
+                    transform = transformations[i]
+                    new_w, new_h = transform['resized_size']
+                    
+                    # Resize dust image to same size as clean was resized
+                    resized_dust = dust_pil.resize((new_w, new_h), Image.BILINEAR)
+                    
+                    # Convert to tensor
+                    dust_tensor = transforms.ToTensor()(resized_dust)  # (C, new_h, new_w)
+                    
+                    # Apply same padding
+                    pad_left, pad_right, pad_top, pad_bottom = transform['padding']
+                    padded_dust = transforms.Pad((pad_left, pad_top, pad_right, pad_bottom), fill=0)(dust_tensor)
+                    
+                    dust_tensor = padded_dust.to(self.device)
+                    
+                    # PyTorch weighted add: dst = saturate(alpha * src1 + beta * src2 + gamma)
+                    # This is equivalent to cv2.addWeighted and fully parallelizable on GPU
+                    dusted = alpha * dust_tensor + beta * clean_tensor + gamma
+                    dusted = torch.clamp(dusted, 0.0, 1.0)  # saturate to [0, 1]
+                    
+                    dusted_images.append(dusted)
+                    continue
+            
+            # Fallback: use procedural dust if no matching image found
+            dust_tensor = self._generate_procedural_dust(C, H, W)
+            dusted = alpha * dust_tensor + beta * clean_tensor + gamma
+            dusted = torch.clamp(dusted, 0.0, 1.0)
+            dusted_images.append(dusted)
+        
+        # Stack and return
+        result = torch.stack(dusted_images, dim=0)
+        return result
+    
+    def _generate_procedural_dust(self, C, H, W):
+        """Generate procedural dust effect as fallback."""
+        dust = torch.ones((C, H, W), device=self.device)
+        
+        # Add noise/texture
+        noise = torch.randn((1, H, W), device=self.device) * 0.1 + 0.7
+        noise = torch.clamp(noise, 0, 1)
+        
+        # Make it yellowish-brown (dust color)
+        dust[0] = noise.squeeze() * 0.9  # R
+        dust[1] = noise.squeeze() * 0.8  # G
+        dust[2] = noise.squeeze() * 0.6  # B
+        
+        return dust
     
     def unpad_and_resize_batch(self, batch_tensor: torch.Tensor, 
                                 transformations: List[Dict]) -> List[Image.Image]:
@@ -352,9 +483,16 @@ class BatchOptimizedRobustnessTest:
                 threshold=score_threshold
             )[0]
             
+            # Only RT-DETR uses contiguous 0-79 labels, other DETR models use standard COCO 1-90
+            labels = processed['labels'].cpu().numpy()
+            if 'rtdetr' in config['hf_model_id'].lower():
+                from evaluator import get_rtdetr_to_coco_mapping
+                rtdetr_to_coco = get_rtdetr_to_coco_mapping()
+                labels = np.array([rtdetr_to_coco.get(int(l), int(l)) for l in labels])
+            
             results.append({
                 'boxes': processed['boxes'].cpu().numpy(),
-                'labels': processed['labels'].cpu().numpy(),
+                'labels': labels,
                 'scores': processed['scores'].cpu().numpy()
             })
         
@@ -398,21 +536,24 @@ class BatchOptimizedRobustnessTest:
         # Post-process each image and transform to original coordinates
         results = []
         for i, transform in enumerate(transformations):
-            # HF models expect target size of the resized (not padded) image
-            resized_h, resized_w = transform['resized_size']
-            target_size = torch.tensor([[resized_h, resized_w]]).to(self.device)
+            # CRITICAL: The PIL images we created are PADDED (e.g., 640x640 with padding)
+            # We need to use the PADDED image size as target, then transform back to original
+            pil_w, pil_h = pil_images[i].size
+            target_size = torch.tensor([[pil_h, pil_w]]).to(self.device)
             
-            # Extract outputs for this image - handle both dict and object outputs
+            # Create a simple namespace object for single image outputs
+            # post_process_object_detection expects an object with logits and pred_boxes attributes
+            from types import SimpleNamespace
             if isinstance(outputs, dict):
-                single_output = {
-                    'logits': outputs['logits'][i:i+1],
-                    'pred_boxes': outputs['pred_boxes'][i:i+1]
-                }
+                single_output = SimpleNamespace(
+                    logits=outputs['logits'][i:i+1],
+                    pred_boxes=outputs['pred_boxes'][i:i+1]
+                )
             else:
-                single_output = {
-                    'logits': outputs.logits[i:i+1],
-                    'pred_boxes': outputs.pred_boxes[i:i+1]
-                }
+                single_output = SimpleNamespace(
+                    logits=outputs.logits[i:i+1],
+                    pred_boxes=outputs.pred_boxes[i:i+1]
+                )
             
             processed = processor.post_process_object_detection(
                 single_output,
@@ -420,17 +561,85 @@ class BatchOptimizedRobustnessTest:
                 threshold=score_threshold
             )[0]
             
+            # Boxes are now in padded image coordinates, need to transform back to original
             boxes = processed['boxes'].cpu().numpy()
             
-            # Transform boxes back to original coordinates
-            # Boxes are in resized space, scale back to original
+            # Transform boxes from padded space back to original space
+            # 1. Scale from padded/resized coordinates to original coordinates
             scale = transform['scale']
             boxes = boxes / scale
             
+            # 2. Remove padding offset (boxes are relative to padded image, shift back)
+            # Padding format: (left, right, top, bottom)
+            pad_left = transform['padding'][0]
+            pad_top = transform['padding'][2]
+            # Note: Since padding is on right/bottom, no offset adjustment needed
+            # (objects in the actual image area don't shift)
+            
+            # Only RT-DETR uses contiguous 0-79 labels, other DETR models use standard COCO 1-90
+            labels = processed['labels'].cpu().numpy()
+            if 'rtdetr' in config['hf_model_id'].lower():
+                from evaluator import get_rtdetr_to_coco_mapping
+                rtdetr_to_coco = get_rtdetr_to_coco_mapping()
+                labels = np.array([rtdetr_to_coco.get(int(l), int(l)) for l in labels])
+            
             results.append({
                 'boxes': boxes,
-                'labels': processed['labels'].cpu().numpy(),
+                'labels': labels,
                 'scores': processed['scores'].cpu().numpy()
+            })
+        
+        return results
+    
+    def predict_batch_ultralytics_tensor(self, model, batch_tensor: torch.Tensor,
+                                          transformations: List[Dict],
+                                          score_threshold: float = 0.05) -> List[Dict]:
+        """
+        Batch prediction for Ultralytics YOLO models from tensor.
+        Process each image and transform predictions back to original coordinates.
+        
+        Args:
+            model: Ultralytics YOLO model
+            batch_tensor: Tensor of shape (B, C, H, W) - padded batch
+            transformations: List of transformation dicts
+            score_threshold: Minimum confidence score
+        
+        Returns:
+            List of predictions (one dict per image) in original image coordinates
+        """
+        # Convert batch tensor to PIL images (YOLO expects PIL or numpy)
+        pil_images = []
+        for i in range(batch_tensor.shape[0]):
+            img_pil = F.to_pil_image(batch_tensor[i].cpu())
+            pil_images.append(img_pil)
+        
+        # YOLO can process batch of images - pass conf threshold to YOLO
+        yolo_results = model(pil_images, conf=score_threshold, verbose=False)
+        
+        # Process each result and transform to original coordinates
+        results = []
+        for i, (yolo_result, transform) in enumerate(zip(yolo_results, transformations)):
+            boxes_obj = yolo_result.boxes
+            
+            # YOLO already filtered by score_threshold, no need to filter again
+            # Get boxes in padded/resized space
+            boxes = boxes_obj.xyxy.cpu().numpy()
+            
+            # Transform boxes back to original coordinates
+            scale = transform['scale']
+            boxes = boxes / scale
+            
+            # YOLO uses 0-79 contiguous labels, need to map to COCO IDs (same as RT-DETR)
+            from evaluator import get_rtdetr_to_coco_mapping
+            yolo_to_coco = get_rtdetr_to_coco_mapping()
+            raw_labels = boxes_obj.cls.cpu().numpy().astype(int)
+            labels = np.array([yolo_to_coco.get(int(l), int(l)) for l in raw_labels])
+            scores = boxes_obj.conf.cpu().numpy()
+            
+            results.append({
+                'boxes': boxes,
+                'labels': labels,
+                'scores': scores
             })
         
         return results
@@ -463,6 +672,10 @@ class BatchOptimizedRobustnessTest:
             return self.predict_batch_huggingface_tensor(
                 model_key, batch_tensor, transformations, score_threshold
             )
+        elif config['type'] == 'ultralytics':
+            return self.predict_batch_ultralytics_tensor(
+                model, batch_tensor, transformations, score_threshold
+            )
         else:
             raise ValueError(f"Unknown model type: {config['type']}")
     
@@ -482,6 +695,18 @@ class BatchOptimizedRobustnessTest:
         Returns:
             Nested dictionary with all results
         """
+        # Load all models first
+        print(f"\n{'='*70}")
+        print(f"Loading {len(model_keys)} models...")
+        print(f"{'='*70}\n")
+        
+        for idx, model_key in enumerate(model_keys):
+            if progress_callback:
+                progress_callback(0, 1, f"Loading model {idx+1}/{len(model_keys)}: {model_key}")
+            
+            print(f"Loading {model_key}...")
+            self.model_loader.load_model(model_key)
+        
         # Initialize results structure
         results = {}
         for model_key in model_keys:
@@ -524,6 +749,7 @@ class BatchOptimizedRobustnessTest:
         for batch_idx, batch in enumerate(dataloader):
             batch_tensor = batch['images'].to(self.device)  # (B, C, H, W)
             batch_image_ids = batch['image_ids']
+            batch_image_paths = batch['image_paths']
             transformations = batch['transformations']
             
             print(f"\n--- Batch {batch_idx + 1}/{total_batches} ---")
@@ -541,10 +767,11 @@ class BatchOptimizedRobustnessTest:
                     model_key, batch_tensor, transformations, score_threshold=0.05
                 )
                 
-                # Store predictions
+                # Store predictions with correct label offset
+                label_offset = self._get_label_offset(model_key)
                 for preds, image_id in zip(batch_preds, batch_image_ids):
                     coco_preds = self.evaluator.convert_predictions_to_coco_format(
-                        preds, image_id, label_offset=0
+                        preds, image_id, label_offset=label_offset
                     )
                     results[model_key]['_predictions']['clean'].extend(coco_preds)
             
@@ -561,7 +788,7 @@ class BatchOptimizedRobustnessTest:
                     
                     # Apply corruption to batch ONCE
                     corrupted_tensor = self.apply_batch_corruption(
-                        batch_tensor, corruption_name, severity
+                        batch_tensor, corruption_name, severity, batch_image_paths, transformations
                     )
                     
                     # Test ALL models on this corrupted batch (stay in tensor form!)
@@ -570,10 +797,11 @@ class BatchOptimizedRobustnessTest:
                             model_key, corrupted_tensor, transformations, score_threshold=0.05
                         )
                         
-                        # Store predictions
+                        # Store predictions with correct label offset
+                        label_offset = self._get_label_offset(model_key)
                         for preds, image_id in zip(batch_preds, batch_image_ids):
                             coco_preds = self.evaluator.convert_predictions_to_coco_format(
-                                preds, image_id, label_offset=0
+                                preds, image_id, label_offset=label_offset
                             )
                             results[model_key]['_predictions']['corrupted'][corruption_name][severity].extend(coco_preds)
         

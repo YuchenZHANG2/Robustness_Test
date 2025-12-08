@@ -1,3 +1,13 @@
+---
+title: Object Detector Robustness Testing
+emoji: 🔍
+colorFrom: blue
+colorTo: purple
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # Object Detector Robustness Testing & Image Matcher
 
 A Flask-based web application suite with two main applications:
@@ -10,13 +20,13 @@ A Flask-based web application suite with two main applications:
 
 - **3-Step Workflow**: Intuitive multi-page interface guiding users through the testing process
 - **Detector Selection**: Choose from pre-trained models (Faster R-CNN, RT-DETR, DETR, RetinaNet, FCOS, etc.)
+- **Interactive Corruption Preview**: Visualize corruptions with adjustable severity sliders (0-5)
 - **Corruption Testing**: Apply various corruption types organized in 4 categories:
   - **Noise**: Gaussian, Shot, Impulse
   - **Blur**: Defocus, Glass, Motion, Zoom
-  - **Weather**: Snow, Frost, Fog, Brightness
+  - **Weather**: Snow, Frost, Fog, Brightness, Dust
   - **Digital**: Contrast, Elastic Transform, Pixelate, JPEG Compression
 - **Batch Processing**: GPU-accelerated batch inference with parallel data loading (4x faster)
-- **Live Preview**: Visualize selected corruptions before running full tests
 - **Comprehensive Metrics**: COCO evaluation metrics (mAP, mAP@50, mAP@75, etc.)
 
 ### Image Matcher (image_matcher_app.py)

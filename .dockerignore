@@ -1,0 +1,37 @@
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info
+dist
+build
+.git
+.gitignore
+.vscode
+.idea
+*.swp
+*.swo
+*~
+.DS_Store
+*.log
+
+# Virtual environments
+venv/
+env/
+ENV/
+DetectorTest/
+
+# Large files that shouldn't be in Docker image initially
+DustyConstruction.v2i.coco/train/*
+DustyConstruction.v2i.coco/test/*
+*.pt
+*.pth
+
+# Temporary files
+uploads/temp/*
+static/validation/*
+static/previews/*
+matched_crops/*

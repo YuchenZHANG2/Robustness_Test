@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+
+{% block progress %}
+<div class="progress-bar">
+    <div class="progress-step completed">1/3</div>
+    <div class="progress-step active">2/3</div>
+    <div class="progress-step">3/3</div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="step-card">
+    <h2>Interactive Corruption Preview</h2>
+    <p class="step-description">Use the sliders to adjust corruption severity (0=clean, 1-5=increasing corruption). Switch to random images to see how corruptions affect different samples.</p>
+    
+    <div class="image-info-header">
+        <div id="imageInfo" class="image-info"></div>
+        <button id="randomImageBtn" class="btn btn-info">🎲 Switch Image</button>
+    </div>
+    
+    <div class="corruption-grid">
+        {% for corruption in corruptions %}
+        <div class="corruption-card">
+            <h3 class="corruption-title">{{ corruption.replace('_', ' ').title() }}</h3>
+            <div class="corruption-image-container">
+                <img id="img_{{ corruption }}" class="corruption-image" src="" alt="Loading...">
+                <div class="loading-overlay" id="loading_{{ corruption }}">
+                    <div class="spinner"></div>
+                </div>
+            </div>
+            <div class="slider-container">
+                <label for="slider_{{ corruption }}">Severity: <span id="severity_{{ corruption }}">0</span></label>
+                <input type="range" 
+                       id="slider_{{ corruption }}" 
+                       class="corruption-slider" 
+                       min="0" 
+                       max="5" 
+                       value="0" 
+                       data-corruption="{{ corruption }}">
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    
+    <div class="button-group">
+        <button onclick="window.location.href='{{ url_for('step2') }}'" class="btn btn-secondary">← Back to Corruption Selection</button>
+        <button onclick="window.location.href='{{ url_for('step3') }}'" class="btn btn-primary">Proceed to Testing →</button>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentImageId = null;
+let severityValues = {};
+
+// Initialize severity values
+{% for corruption in corruptions %}
+severityValues['{{ corruption }}'] = 0;
+{% endfor %}
+
+// Load random image on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadRandomImage();
+});
+
+// Random image button handler
+document.getElementById('randomImageBtn').addEventListener('click', function() {
+    loadRandomImage();
+});
+
+// Slider handlers
+document.querySelectorAll('.corruption-slider').forEach(slider => {
+    slider.addEventListener('input', function() {
+        const corruption = this.dataset.corruption;
+        const severity = parseInt(this.value);
+        severityValues[corruption] = severity;
+        
+        // Update severity display
+        document.getElementById(`severity_${corruption}`).textContent = severity;
+        
+        // Apply corruption
+        applyCorruption(corruption, severity);
+    });
+});
+
+function loadRandomImage() {
+    // Disable button temporarily
+    const btn = document.getElementById('randomImageBtn');
+    btn.disabled = true;
+    btn.textContent = '⏳ Loading...';
+    
+    // Show loading for all images
+    document.querySelectorAll('.loading-overlay').forEach(overlay => {
+        overlay.style.display = 'flex';
+    });
+    
+    fetch('/api/random_image')
+        .then(res => {
+            if (!res.ok) {
+                return res.json().then(data => {
+                    throw new Error(data.error || 'Failed to load image');
+                });
+            }
+            return res.json();
+        })
+        .then(data => {
+            if (data.error) {
+                alert('Error: ' + data.error);
+                return;
+            }
+            
+            currentImageId = data.image_id;
+            document.getElementById('imageInfo').innerHTML = 
+                `<strong>Image:</strong> ${data.image_name} (ID: ${data.image_id})`;
+            
+            // Reset all sliders and load all corruptions at current severity
+            {% for corruption in corruptions %}
+            const slider_{{ corruption.replace('-', '_') }} = document.getElementById('slider_{{ corruption }}');
+            const severity_{{ corruption.replace('-', '_') }} = severityValues['{{ corruption }}'];
+            applyCorruption('{{ corruption }}', severity_{{ corruption.replace('-', '_') }});
+            {% endfor %}
+            
+            btn.disabled = false;
+            btn.textContent = 'Switch Image';
+        })
+        .catch(err => {
+            console.error('Error loading random image:', err);
+            alert('Failed to load random image: ' + err.message);
+            btn.disabled = false;
+            btn.textContent = 'Switch Image';
+            
+            // Hide loading overlays
+            document.querySelectorAll('.loading-overlay').forEach(overlay => {
+                overlay.style.display = 'none';
+            });
+        });
+}
+
+function applyCorruption(corruption, severity) {
+    if (!currentImageId) {
+        console.log('No image loaded yet');
+        return;
+    }
+    
+    const imgElement = document.getElementById(`img_${corruption}`);
+    const loadingOverlay = document.getElementById(`loading_${corruption}`);
+    
+    // Show loading
+    loadingOverlay.style.display = 'flex';
+    
+    fetch(`/api/apply_corruption?image_id=${currentImageId}&corruption=${corruption}&severity=${severity}`)
+        .then(res => res.blob())
+        .then(blob => {
+            const url = URL.createObjectURL(blob);
+            imgElement.src = url;
+            loadingOverlay.style.display = 'none';
+        })
+        .catch(err => {
+            console.error(`Error applying ${corruption}:`, err);
+            imgElement.alt = 'Error loading image';
+            loadingOverlay.style.display = 'none';
+        });
+}
+</script>
+{% endblock %}

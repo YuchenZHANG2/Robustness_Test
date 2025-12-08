@@ -133,6 +133,8 @@ def step1():
 @app.route('/step2', methods=['GET', 'POST'])
 def step2():
     """Step 2/3: Dataset and Corruption Selection"""
+    global evaluator
+    
     if request.method == 'POST':
         action = request.form.get('action')
         selected_dataset = request.form.get('dataset')
@@ -145,18 +147,23 @@ def step2():
         session['selected_corruptions'] = selected_corruptions
         
         if action == 'preview':
-            return render_template('step2.html', 
-                                 corruptions=CORRUPTIONS,
-                                 datasets=DATASET_CONFIG,
-                                 selected_dataset=selected_dataset,
-                                 selected_corruptions=selected_corruptions,
-                                 show_preview=True)
+            # Store selected dataset and initialize evaluator for preview
+            session['selected_dataset'] = selected_dataset
+            
+            dataset_config = DATASET_CONFIG[selected_dataset]
+            evaluator = COCOEvaluator(
+                annotation_file=dataset_config['annotation_file'],
+                image_dir=dataset_config['image_dir'],
+                filter_classes=dataset_config['filter_classes'],
+                class_mapping=dataset_config['class_mapping']
+            )
+            
+            return redirect(url_for('interactive_preview'))
         
         elif action == 'next':
             # Store selected dataset and update evaluator
             session['selected_dataset'] = selected_dataset
             
-            global evaluator
             dataset_config = DATASET_CONFIG[selected_dataset]
             evaluator = COCOEvaluator(
                 annotation_file=dataset_config['annotation_file'],
@@ -166,11 +173,16 @@ def step2():
             )
             return redirect(url_for('step3'))
     
+    # Get previously selected values from session (for GET requests or back navigation)
+    selected_dataset = session.get('selected_dataset', None)
+    selected_corruptions = session.get('selected_corruptions', [])
+    
     return render_template('step2.html', 
                          corruptions=CORRUPTIONS,
                          dataset_specific_corruptions=DATASET_SPECIFIC_CORRUPTIONS,
                          datasets=DATASET_CONFIG, 
-                         selected_dataset=None,
+                         selected_dataset=selected_dataset,
+                         selected_corruptions=selected_corruptions,
                          show_preview=False)
 
 
@@ -242,22 +254,22 @@ def load_and_predict_custom():
         # Add custom model to MODEL_CONFIGS temporarily
         custom_key = 'custom_hf_preview'
         # Auto-detect if it's an Ultralytics/YOLO model
-        # Check for: 'ultra', 'yolo', '.pt' extension, or 'Ultralytics/' prefix
-        is_yolo = (
-            'ultra' in custom_detector_hf.lower() or 
-            'yolo' in custom_detector_hf.lower() or 
-            custom_detector_hf.endswith('.pt')
+        # Check for .pt extension (local YOLO files) or no "/" (e.g., "yolo11n.pt")
+        # HuggingFace models always have "/" in the path (e.g., "hustvl/yolos-small")
+        is_ultralytics = (
+            custom_detector_hf.endswith('.pt') or 
+            ('/' not in custom_detector_hf and 'yolo' in custom_detector_hf.lower())
         )
         
-        if is_yolo:
+        if is_ultralytics:
             MODEL_CONFIGS[custom_key] = {
-                "name": f"Custom YOLO: {custom_detector_hf}",
+                "name": f"Custom Ultralytics: {custom_detector_hf}",
                 "type": "ultralytics",
                 "model_name": custom_detector_hf
             }
         else:
             MODEL_CONFIGS[custom_key] = {
-                "name": f"Custom HF: {custom_detector_hf}",
+                "name": f"Custom HuggingFace: {custom_detector_hf}",
                 "type": "huggingface",
                 "hf_model_id": custom_detector_hf
             }
@@ -317,22 +329,22 @@ def execute_test():
     if custom_detector_hf:
         custom_key = 'custom_hf'
         # Auto-detect if it's an Ultralytics/YOLO model
-        # Check for: 'ultra', 'yolo', '.pt' extension, or 'Ultralytics/' prefix
-        is_yolo = (
-            'ultra' in custom_detector_hf.lower() or 
-            'yolo' in custom_detector_hf.lower() or 
-            custom_detector_hf.endswith('.pt')
+        # Check for .pt extension (local YOLO files) or no "/" (e.g., "yolo11n.pt")
+        # HuggingFace models always have "/" in the path (e.g., "hustvl/yolos-small")
+        is_ultralytics = (
+            custom_detector_hf.endswith('.pt') or 
+            ('/' not in custom_detector_hf and 'yolo' in custom_detector_hf.lower())
         )
         
-        if is_yolo:
+        if is_ultralytics:
             MODEL_CONFIGS[custom_key] = {
-                "name": f"Custom YOLO: {custom_detector_hf}",
+                "name": f"Custom Ultralytics: {custom_detector_hf}",
                 "type": "ultralytics",
                 "model_name": custom_detector_hf
             }
         else:
             MODEL_CONFIGS[custom_key] = {
-                "name": f"Custom HF: {custom_detector_hf}",
+                "name": f"Custom HuggingFace: {custom_detector_hf}",
                 "type": "huggingface",
                 "hf_model_id": custom_detector_hf
             }
@@ -483,5 +495,157 @@ def preview_corruption():
     return jsonify({'preview_url': url_for('static', filename=preview_path)})
 
 
+@app.route('/interactive_preview')
+def interactive_preview():
+    """Interactive corruption preview page"""
+    print(f"DEBUG: interactive_preview called")
+    print(f"DEBUG: evaluator = {evaluator}")
+    print(f"DEBUG: session = {dict(session)}")
+    
+    corruptions = session.get('selected_corruptions', [])
+    if not corruptions:
+        print("ERROR: No corruptions in session, redirecting to step2")
+        return redirect(url_for('step2'))
+    
+    if evaluator is None:
+        print("ERROR: evaluator is None, redirecting to step2")
+        return redirect(url_for('step2'))
+    
+    print(f"DEBUG: Rendering interactive_preview with {len(corruptions)} corruptions")
+    return render_template('interactive_preview.html', corruptions=corruptions)
+
+
+
+@app.route('/api/random_image')
+def api_random_image():
+    """Get a random image from the selected dataset"""
+    print(f"DEBUG: api_random_image called, evaluator is: {evaluator}")
+    
+    if evaluator is None:
+        print("ERROR: evaluator is None")
+        return jsonify({'error': 'No dataset selected. Please go back to Step 2 and select a dataset.'}), 400
+    
+    try:
+        # Get a random image
+        image_ids = evaluator.get_random_images(n=1)
+        if not image_ids:
+            print("ERROR: No images available")
+            return jsonify({'error': 'No images available'}), 400
+        
+        image_id = image_ids[0]
+        image_info = evaluator.coco_gt.loadImgs(image_id)[0]
+        
+        print(f"DEBUG: Returning image {image_id}: {image_info['file_name']}")
+        
+        return jsonify({
+            'image_id': image_id,
+            'image_name': image_info['file_name']
+        })
+    except Exception as e:
+        print(f"ERROR in api_random_image: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/apply_corruption')
+def api_apply_corruption():
+    """Apply corruption to an image and return the result"""
+    from torch_corruptions import corrupt
+    from io import BytesIO
+    import cv2
+    import numpy as np
+    
+    if evaluator is None:
+        return jsonify({'error': 'No dataset selected'}), 400
+    
+    image_id = request.args.get('image_id', type=int)
+    corruption = request.args.get('corruption')
+    severity = request.args.get('severity', type=int)
+    
+    if image_id is None or corruption is None or severity is None:
+        return jsonify({'error': 'Missing parameters'}), 400
+    
+    # Load image
+    image_info = evaluator.coco_gt.loadImgs(image_id)[0]
+    image_path = os.path.join(evaluator.image_dir, image_info['file_name'])
+    
+    try:
+        # Load image
+        image = Image.open(image_path).convert('RGB')
+        
+        # Apply corruption if severity > 0
+        if severity > 0:
+            # Special handling for dust corruption
+            if corruption == 'dust':
+                # For dust, we need to load the corresponding dusty image from test folder
+                from pathlib import Path
+                dust_dir = Path(evaluator.image_dir).parent / 'test'
+                
+                if dust_dir.exists():
+                    # Get clean image filename and extract first 7 digits as prefix
+                    clean_filename = image_info['file_name']
+                    prefix = clean_filename[:7]
+                    
+                    # Find matching dusty image
+                    matching_files = list(dust_dir.glob(f"{prefix}*"))
+                    
+                    if matching_files:
+                        # Load dusty image
+                        dust_path = matching_files[0]
+                        dust_img = cv2.imread(str(dust_path))
+                        dust_img = cv2.cvtColor(dust_img, cv2.COLOR_BGR2RGB)
+                        
+                        # Resize dust image to match clean image size
+                        clean_array = np.array(image)
+                        dust_img_resized = cv2.resize(dust_img, (clean_array.shape[1], clean_array.shape[0]))
+                        
+                        # Blend based on severity
+                        # severity 1: 20% dust, severity 5: 100% dust
+                        alpha_values = [0.2, 0.4, 0.6, 0.8, 1.0]
+                        alpha = alpha_values[severity - 1]
+                        beta = 1.0 - alpha
+                        
+                        # Blend images
+                        blended = cv2.addWeighted(dust_img_resized, alpha, clean_array, beta, 0)
+                        corrupted_image = Image.fromarray(blended.astype('uint8'))
+                    else:
+                        # No matching dust image found, return clean image
+                        print(f"Warning: No dust image found for {prefix}")
+                        corrupted_image = image
+                else:
+                    # Dust directory doesn't exist, return clean image
+                    print(f"Warning: Dust directory not found at {dust_dir}")
+                    corrupted_image = image
+            else:
+                # Apply standard corruption
+                import numpy as np
+                img_array = np.array(image)
+                
+                # Apply corruption
+                corrupted_array = corrupt(img_array, corruption, severity=severity)
+                
+                # Convert back to PIL
+                corrupted_image = Image.fromarray(corrupted_array.astype('uint8'))
+        else:
+            # Severity 0 means clean image
+            corrupted_image = image
+        
+        # Convert to bytes
+        img_io = BytesIO()
+        corrupted_image.save(img_io, 'JPEG', quality=95)
+        img_io.seek(0)
+        
+        from flask import send_file
+        return send_file(img_io, mimetype='image/jpeg')
+        
+    except Exception as e:
+        print(f"Error applying corruption: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5001)
+

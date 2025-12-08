@@ -697,3 +697,196 @@ pre {
         align-items: center;
     }
 }
+/* Interactive Preview Styles */
+.preview-controls {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 25px;
+    align-items: center;
+}
+
+.image-info {
+    background: #f0f4ff;
+    padding: 12px 20px;
+    border-radius: 8px;
+    margin-bottom: 25px;
+    color: #4a5568;
+    border-left: 4px solid #667eea;
+}
+
+.corruption-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 25px;
+    margin-top: 20px;
+}
+
+.corruption-card {
+    background: #ffffff;
+    border: 2px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 16px;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.corruption-card:hover {
+    border-color: #667eea;
+    box-shadow: 0 4px 16px rgba(102, 126, 234, 0.15);
+    transform: translateY(-2px);
+}
+
+.corruption-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #2d3748;
+    margin-bottom: 12px;
+    text-align: center;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #e2e8f0;
+}
+
+.corruption-image-container {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 4/3;
+    background: #f7fafc;
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 12px;
+}
+
+.corruption-image {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+}
+
+.loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+}
+
+.spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid #e2e8f0;
+    border-top-color: #667eea;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.slider-container {
+    padding: 10px 0;
+}
+
+.slider-container label {
+    display: block;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: #4a5568;
+    margin-bottom: 8px;
+    text-align: center;
+}
+
+.slider-container label span {
+    display: inline-block;
+    min-width: 20px;
+    padding: 2px 8px;
+    background: #667eea;
+    color: white;
+    border-radius: 12px;
+    font-weight: 600;
+    margin-left: 5px;
+}
+
+.corruption-slider {
+    width: 100%;
+    height: 6px;
+    border-radius: 3px;
+    background: #e2e8f0;
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+    cursor: pointer;
+}
+
+.corruption-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #667eea;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 6px rgba(102, 126, 234, 0.3);
+}
+
+.corruption-slider::-webkit-slider-thumb:hover {
+    background: #5a67d8;
+    transform: scale(1.2);
+    box-shadow: 0 3px 10px rgba(102, 126, 234, 0.5);
+}
+
+.corruption-slider::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #667eea;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 6px rgba(102, 126, 234, 0.3);
+}
+
+.corruption-slider::-moz-range-thumb:hover {
+    background: #5a67d8;
+    transform: scale(1.2);
+    box-shadow: 0 3px 10px rgba(102, 126, 234, 0.5);
+}
+
+.corruption-slider::-webkit-slider-runnable-track {
+    width: 100%;
+    height: 6px;
+    background: linear-gradient(to right, #48bb78 0%, #f6ad55 50%, #fc8181 100%);
+    border-radius: 3px;
+}
+
+.corruption-slider::-moz-range-track {
+    width: 100%;
+    height: 6px;
+    background: linear-gradient(to right, #48bb78 0%, #f6ad55 50%, #fc8181 100%);
+    border-radius: 3px;
+}
+
+/* Image info header with switch button */
+.image-info-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 15px;
+    margin-bottom: 25px;
+}
+
+.image-info-header .image-info {
+    flex: 1;
+    margin-bottom: 0;
+}
+
+.image-info-header .btn {
+    white-space: nowrap;
+}

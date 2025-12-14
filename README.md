@@ -11,7 +11,7 @@ pip install -r requirements.txt
 
 ### 2. Download Datasets
 
-- **COCO**: Download from [COCO website](https://cocodataset.org/#download) and update paths in `DATASET_CONFIG` in `app.py` (lines 36-40)
+- **COCO**: Download from [COCO website](https://cocodataset.org/#download) the Coco Val 2017 images and annotations and update paths in `DATASET_CONFIG` in `app.py` (lines 36-40)
 - **DustyConstruction**: Download from [Hugging Face](https://huggingface.co/datasets/YuchenGua/Dusty_Construction) and update paths in `DATASET_CONFIG` in `app.py` (lines 42-46)
 
 ### 3. Run the Application

@@ -12,3 +12,4 @@ transformers>=4.30.0
 ultralytics>=8.0.0
 pycocotools>=2.0.6
 tqdm>=4.65.0
+timm

@@ -10,7 +10,7 @@ from model_loader import ModelLoader, MODEL_CONFIGS
 from evaluator import COCOEvaluator, format_coco_label_mapping
 from visualization import visualize_predictions, fig_to_base64
 from batch_optimized_pipeline import BatchOptimizedRobustnessTest
-from pdf_generator import RobustnessReportGenerator
+from pdf_report import RobustnessReportGenerator
 
 # Global variable to track test progress
 test_progress = {

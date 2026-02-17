@@ -5,10 +5,27 @@ from reportlab.lib.pagesizes import letter, A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
-from reportlab.lib.colors import HexColor
+from reportlab.platypus import (BaseDocTemplate, Frame, PageTemplate, Paragraph, 
+                                 Spacer, PageBreak, Table, TableStyle, KeepTogether, FrameBreak)
+from reportlab.platypus.flowables import Flowable, HRFlowable
+from reportlab.lib.colors import HexColor, Color
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 from datetime import datetime
 import os
+
+
+class ColoredBox(Flowable):
+    """Custom flowable for drawing colored boxes"""
+    def __init__(self, width, height, color):
+        Flowable.__init__(self)
+        self.width = width
+        self.height = height
+        self.color = color
+    
+    def draw(self):
+        self.canv.setFillColor(self.color)
+        self.canv.rect(0, 0, self.width, self.height, fill=1, stroke=0)
 
 
 class RobustnessReportGenerator:
@@ -17,8 +34,21 @@ class RobustnessReportGenerator:
     def __init__(self, output_dir='static'):
         self.output_dir = output_dir
         os.makedirs(output_dir, exist_ok=True)
+        self._register_fonts()
         self.styles = getSampleStyleSheet()
         self._setup_custom_styles()
+    
+    def _register_fonts(self):
+        """Register DejaVu Serif font family"""
+        try:
+            pdfmetrics.registerFont(TTFont('DejaVuSerif', '/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf'))
+            pdfmetrics.registerFont(TTFont('DejaVuSerif-Bold', '/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf'))
+            pdfmetrics.registerFont(TTFont('DejaVuSerif-Italic', '/usr/share/fonts/truetype/dejavu/DejaVuSerif-Italic.ttf'))
+            pdfmetrics.registerFont(TTFont('DejaVuSerif-BoldItalic', '/usr/share/fonts/truetype/dejavu/DejaVuSerif-BoldItalic.ttf'))
+        except:
+            # Fallback to Helvetica if DejaVu fonts not found
+            print("Warning: DejaVu Serif fonts not found, using Helvetica")
+            pass
     
     def _setup_custom_styles(self):
         """Setup custom paragraph styles"""
@@ -26,33 +56,68 @@ class RobustnessReportGenerator:
         self.styles.add(ParagraphStyle(
             name='MainTitle',
             parent=self.styles['Heading1'],
-            fontSize=28,
-            textColor=HexColor('#1a1a1a'),
-            spaceAfter=20,
+            fontSize=24,
+            textColor=HexColor('#ffffff'),  # White text
+            spaceAfter=8,
             alignment=TA_CENTER,
-            fontName='Helvetica-Bold'
+            fontName='DejaVuSerif-Bold',
+            leading=30
         ))
         
-        # Subtitle style
+        # Subtitle style (under main title)
         self.styles.add(ParagraphStyle(
-            name='Subtitle',
+            name='MainSubtitle',
             parent=self.styles['Normal'],
-            fontSize=16,
-            textColor=HexColor('#4a4a4a'),
-            spaceAfter=12,
+            fontSize=12,
+            textColor=HexColor('#e3f2fd'),  # Light blue
+            spaceAfter=40,
             alignment=TA_CENTER,
-            fontName='Helvetica'
+            fontName='DejaVuSerif'
+        ))
+        
+        # Section label
+        self.styles.add(ParagraphStyle(
+            name='SectionLabel',
+            parent=self.styles['Normal'],
+            fontSize=11,
+            textColor=HexColor('#ffffff'),  # White
+            spaceAfter=4,
+            alignment=TA_LEFT,
+            fontName='DejaVuSerif-Bold'
+        ))
+        
+        # Content text
+        self.styles.add(ParagraphStyle(
+            name='ContentText',
+            parent=self.styles['Normal'],
+            fontSize=10,
+            textColor=HexColor('#f0f0f0'),  # Very light gray
+            spaceAfter=6,
+            alignment=TA_LEFT,
+            fontName='DejaVuSerif',
+            leading=14
         ))
         
         # Section header
         self.styles.add(ParagraphStyle(
             name='SectionHeader',
             parent=self.styles['Heading2'],
-            fontSize=18,
+            fontSize=16,
             textColor=HexColor('#2c3e50'),
             spaceAfter=12,
             spaceBefore=20,
-            fontName='Helvetica-Bold'
+            fontName='DejaVuSerif-Bold'
+        ))
+        
+        # Footnote style
+        self.styles.add(ParagraphStyle(
+            name='Footnote',
+            parent=self.styles['Normal'],
+            fontSize=8,
+            leading=10,
+            textColor=HexColor('#b3d9ff'),
+            alignment=TA_CENTER,
+            fontName='DejaVuSerif-Italic'
         ))
     
     def generate_report(self, detectors, corruptions, results=None, dataset_name=None):
@@ -73,15 +138,33 @@ class RobustnessReportGenerator:
         filename = f"robustness_report_{timestamp}.pdf"
         filepath = os.path.join(self.output_dir, filename)
         
-        # Create PDF document
-        doc = SimpleDocTemplate(
-            filepath,
-            pagesize=letter,
-            rightMargin=72,
-            leftMargin=72,
-            topMargin=72,
-            bottomMargin=72
+        # Page dimensions
+        width, height = letter
+        
+        # Define frames: main content and footnote at bottom
+        main_frame = Frame(
+            inch,
+            1.2 * inch,  # Leave space at bottom for footnote
+            width - 2 * inch,
+            height - 2.2 * inch,
+            id="main"
         )
+        
+        footnote_frame = Frame(
+            inch,
+            0.3 * inch,  # Bottom margin
+            width - 2 * inch,
+            0.5 * inch,
+            id="footnote"
+        )
+        
+        # Create page template with both frames
+        page_template = PageTemplate(id="template", frames=[main_frame, footnote_frame],
+                                    onPage=self._add_page_background)
+        
+        # Create PDF document with BaseDocTemplate
+        doc = BaseDocTemplate(filepath, pagesize=letter)
+        doc.addPageTemplates([page_template])
         
         # Build content
         story = []
@@ -94,72 +177,132 @@ class RobustnessReportGenerator:
         
         return filepath
     
+    def _add_page_background(self, canvas, doc):
+        """Add blue background to entire page"""
+        canvas.saveState()
+        canvas.setFillColor(HexColor("#114584"))  # RGB(0,101,189)
+        canvas.rect(0, 0, letter[0], letter[1], fill=1, stroke=0)
+        canvas.restoreState()
+    
     def _create_title_page(self, detectors, corruptions, dataset_name):
         """Create the title page of the report"""
         elements = []
         
-        # Add vertical space
-        elements.append(Spacer(1, 1.5*inch))
+        # Add top space
+        elements.append(Spacer(1, 1.2*inch))
         
-        # Main title
-        title = Paragraph("Robustness Test Report", self.styles['MainTitle'])
+        # Main title (white on blue background)
+        title = Paragraph("Robustness Evaluation of<br/>Object Detection Models", self.styles['MainTitle'])
         elements.append(title)
         elements.append(Spacer(1, 0.3*inch))
         
-        # Format detectors list
-        if len(detectors) == 1:
-            detectors_text = detectors[0]
-        elif len(detectors) == 2:
-            detectors_text = f"{detectors[0]} and {detectors[1]}"
-        else:
-            detectors_text = f"{', '.join(detectors[:-1])}, and {detectors[-1]}"
+
+        elements.append(Spacer(1, 0.5*inch))
+        # White horizontal line separator
+        line_table = Table([['']], colWidths=[5*inch])
+        line_table.setStyle(TableStyle([
+            ('LINEABOVE', (0, 0), (-1, 0), 1.5, HexColor('#ffffff')),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ]))
+        elements.append(line_table)
+        elements.append(Spacer(1, 0.5*inch))
         
-        # Subtitle: Among detectors
-        subtitle1 = Paragraph(
-            f"<b>Among:</b> {detectors_text}",
-            self.styles['Subtitle']
-        )
-        elements.append(subtitle1)
-        elements.append(Spacer(1, 0.2*inch))
+        # Create 2-column table for information
+        table_data = []
         
-        # Format corruptions list
-        if len(corruptions) == 1:
-            corruptions_text = corruptions[0].replace('_', ' ').title()
-        elif len(corruptions) == 2:
-            corruptions_text = f"{corruptions[0].replace('_', ' ').title()} and {corruptions[1].replace('_', ' ').title()}"
-        else:
-            formatted_corruptions = [c.replace('_', ' ').title() for c in corruptions]
-            corruptions_text = f"{', '.join(formatted_corruptions[:-1])}, and {formatted_corruptions[-1]}"
+        # 1. Tested Models
+        detectors_bullets = '<br/>'.join([f"• {d}" for d in detectors])
+        table_data.append([
+            Paragraph('<b>Tested Models:</b>', self.styles['SectionLabel']),
+            Paragraph(detectors_bullets, self.styles['ContentText'])
+        ])
         
-        # Subtitle: Under corruptions
-        subtitle2 = Paragraph(
-            f"<b>Under:</b> {corruptions_text}",
-            self.styles['Subtitle']
-        )
-        elements.append(subtitle2)
+        # 2. Corruption Types
+        formatted_corruptions = [c.replace('_', ' ').title() for c in corruptions]
+        corruptions_bullets = '<br/>'.join([f"• {c}" for c in formatted_corruptions])
+        table_data.append([
+            Paragraph('<b>Corruption Types:</b>', self.styles['SectionLabel']),
+            Paragraph(corruptions_bullets, self.styles['ContentText'])
+        ])
         
-        # Add dataset info if available
+        # 3. Dataset - if available
         if dataset_name:
-            elements.append(Spacer(1, 0.3*inch))
-            dataset_info = Paragraph(
-                f"<b>Dataset:</b> {dataset_name}",
-                self.styles['Subtitle']
-            )
-            elements.append(dataset_info)
+            table_data.append([
+                Paragraph('<b>Evaluation Dataset:</b>', self.styles['SectionLabel']),
+                Paragraph(f"• {dataset_name}", self.styles['ContentText'])
+            ])
         
-        # Add generation date
-        elements.append(Spacer(1, 1*inch))
-        date_text = Paragraph(
-            f"Generated on: {datetime.now().strftime('%B %d, %Y at %H:%M')}",
-            self.styles['Normal']
-        )
-        date_text.style.alignment = TA_CENTER
-        date_text.style.fontSize = 10
-        date_text.style.textColor = HexColor('#7f8c8d')
-        elements.append(date_text)
+        # Create table without borders, centered
+        info_table = Table(table_data, colWidths=[2*inch, 3*inch], hAlign='CENTER')
+        info_table.setStyle(TableStyle([
+            ('ALIGN', (0, 0), (0, -1), 'LEFT'),
+            ('ALIGN', (1, 0), (1, -1), 'LEFT'),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 0),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 10),
+            ('TOPPADDING', (0, 0), (-1, -1), 8),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+        ]))
+        elements.append(info_table)
+
+        
+        elements.append(Spacer(1, 0.5*inch))
+        # White horizontal line separator
+        line_table = Table([['']], colWidths=[5*inch])
+        line_table.setStyle(TableStyle([
+            ('LINEABOVE', (0, 0), (-1, 0), 1.5, HexColor('#ffffff')),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ]))
+        elements.append(line_table)
+        elements.append(Spacer(1, 0.3*inch))
+        
+        # Switch to footnote frame at bottom
+        elements.append(FrameBreak())
+        
+        # # Add horizontal line separator for footnote
+        # elements.append(HRFlowable(width="100%", thickness=0.5, color=HexColor('#ffffff')))
+        
+        # Add footnote at true bottom of page
+        footnote = Paragraph("MOBIMA 107I", self.styles['Footnote'])
+        elements.append(footnote)
         
         # Page break after title page
         elements.append(PageBreak())
+        
+        return elements
+    
+    def _create_info_section(self, label, content):
+        """
+        Create a simple information section with label and content
+        
+        Args:
+            label: Section label
+            content: List of items to display
+        """
+        elements = []
+        
+        # Label
+        label_para = Paragraph(f"<b>{label}:</b>", self.styles['SectionLabel'])
+        elements.append(label_para)
+        elements.append(Spacer(1, 0.1*inch))
+        
+        # Format content into a clean list
+        if isinstance(content, list):
+            if len(content) <= 5:
+                # Show all items
+                content_items = content
+            else:
+                # Show first 5 and count
+                content_items = content[:5]
+                content_items.append(f"... and {len(content) - 5} more")
+            
+            content_text = '<br/>'.join([f"  • {item}" for item in content_items])
+        else:
+            content_text = f"  {str(content)}"
+        
+        # Content directly on blue background without box
+        content_para = Paragraph(content_text, self.styles['ContentText'])
+        elements.append(content_para)
         
         return elements
 

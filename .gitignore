@@ -1,1 +1,10 @@
 DetectorTest
+static/previews
+__pycache__
+DustyConstruction.v2i.coco
+matched_crops
+uploads/temp
+*.pt
+*.png
+*.pdf
+*.json

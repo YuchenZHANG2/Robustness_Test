@@ -10,6 +10,7 @@ from model_loader import ModelLoader, MODEL_CONFIGS
 from evaluator import COCOEvaluator, format_coco_label_mapping
 from visualization import visualize_predictions, fig_to_base64
 from batch_optimized_pipeline import BatchOptimizedRobustnessTest
+from pdf_generator import RobustnessReportGenerator
 
 # Global variable to track test progress
 test_progress = {
@@ -430,10 +431,43 @@ def show_results():
     # Get category names from evaluator
     category_names = evaluator.get_category_names() if evaluator else {}
     
+    # Generate PDF if requested
+    pdf_path = None
+    if session.get('generate_pdf', False):
+        try:
+            # Get detector names
+            detector_keys = session.get('selected_detectors', [])
+            detector_names = [PREDEFINED_DETECTORS.get(key, key) for key in detector_keys]
+            custom_detector_hf = session.get('custom_detector_hf')
+            if custom_detector_hf:
+                detector_names.append(f"Custom: {custom_detector_hf}")
+            
+            # Get corruptions
+            corruptions = session.get('selected_corruptions', [])
+            
+            # Get dataset name
+            dataset_name = session.get('dataset', 'Unknown')
+            
+            # Generate PDF
+            generator = RobustnessReportGenerator()
+            pdf_path = generator.generate_report(
+                detectors=detector_names,
+                corruptions=corruptions,
+                results=sorted_results,
+                dataset_name=dataset_name
+            )
+            # Make path relative for web serving
+            pdf_path = pdf_path.replace('static/', '')
+        except Exception as e:
+            print(f"Error generating PDF: {e}")
+            import traceback
+            traceback.print_exc()
+    
     return render_template('show_results.html', 
                          results=sorted_results, 
                          plot_data=plot_data,
-                         category_names=json.dumps(category_names))
+                         category_names=json.dumps(category_names),
+                         pdf_path=pdf_path)
 
 
 def generate_corruption_plots(results):

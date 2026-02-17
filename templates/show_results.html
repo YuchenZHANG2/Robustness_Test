@@ -5,6 +5,16 @@
     <h2>Test Results</h2>
     <p class="step-description">Robustness evaluation results across all models and corruptions.</p>
     
+    {% if pdf_path %}
+    <div class="section pdf-download-section" style="background-color: #e8f5e9; border-left: 4px solid #4caf50; padding: 15px; margin-bottom: 20px;">
+        <h3 style="color: #2e7d32; margin-top: 0;">📄 PDF Report Generated</h3>
+        <p>Your detailed robustness analysis report is ready for download.</p>
+        <a href="{{ url_for('static', filename=pdf_path) }}" download class="btn btn-success">
+            Download PDF Report
+        </a>
+    </div>
+    {% endif %}
+    
     <div class="section">
         <h3>Summary: mAP Comparison</h3>
         

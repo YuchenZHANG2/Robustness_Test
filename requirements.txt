@@ -13,3 +13,4 @@ ultralytics>=8.0.0
 pycocotools>=2.0.6
 tqdm>=4.65.0
 timm
+reportlab>=4.0.0

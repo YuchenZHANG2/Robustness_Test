@@ -1,20 +1,60 @@
 # PDF Report Module
 
-This module generates professional PDF reports for robustness evaluation results.
+This module generates professional PDF reports for robustness evaluation results of object detection models.
 
 ## Structure
 
 ```
 pdf_report/
-├── __init__.py                  # Main generator class and document setup
-├── styles.py                    # All paragraph styles and color definitions
-├── components.py                # Reusable components (backgrounds, boxes)
-├── utils.py                     # Helper functions (fonts, calculations)
-├── title_page.py                # Title page generation
-├── map_comparison_page.py       # mAP comparison table page
-├── test_generator.py            # Test script
-└── README.md                    # This file
+├── __init__.py                     # Main RobustnessReportGenerator class
+├── constants.py                    # Shared constants (colors, thresholds, etc.)
+├── styles.py                       # All paragraph styles and color definitions
+├── components.py                   # Page backgrounds components
+├── utils.py                        # Helper functions (fonts, calculations, formatting)
+├── table_utils.py                  # Table styling utilities
+├── visualization_utils.py          # Plot and chart generation utilities
+├── title_page.py                   # Title page generation
+├── table_of_contents_page.py       # Table of contents generation
+├── map_comparison_page.py          # mAP comparison table and radar chart
+├── corruption_detail_page.py       # Individual corruption analysis pages
+├── qualitative_examples.py         # Qualitative visualization grids
+├── test_generator.py               # Test script
+└── README.md                       # This file
 ```
+
+## Module Organization
+
+### Core Modules
+- **`__init__.py`**: Main `RobustnessReportGenerator` class orchestrating report creation
+- **`constants.py`**: Centralized constants (MODEL_COLORS, severity levels, thresholds)
+- **`styles.py`**: All paragraph and text styles used throughout the report
+- **`components.py`**: Page background functions (blue for title, white for content)
+
+### Utility Modules
+- **`utils.py`**: Core utilities
+  - Font registration
+  - Metrics calculation
+  - Corruption name formatting
+  - Qualitative image selection/management
+  
+- **`table_utils.py`**: Table styling utilities
+  - Three-line table style (standard academic format)
+  - Severity table style (dual-row per model)
+  - Notes section formatting
+  
+- **`visualization_utils.py`**: Visualization generation
+  - Severity line plots
+  - Spider/radar charts
+  - Grid image composition
+  - PIL to ReportLab conversion
+  - Column headers flowable
+
+### Page Modules
+- **`title_page.py`**: Title page with project information
+- **`table_of_contents_page.py`**: Clickable table of contents
+- **`map_comparison_page.py`**: Overall mAP comparison with radar chart
+- **`corruption_detail_page.py`**: Per-corruption analysis with plots and tables
+- **`qualitative_examples.py`**: Qualitative visualization grids
 
 ## Usage
 
@@ -26,7 +66,7 @@ from pdf_report import RobustnessReportGenerator
 # Initialize generator
 generator = RobustnessReportGenerator(output_dir='static')
 
-# Generate basic report (without qualitative examples)
+# Generate basic report (quantitative only)
 pdf_path = generator.generate_report(
     detectors=['YOLO11', 'Faster R-CNN V2'],
     corruptions=['gaussian_noise', 'motion_blur'],
@@ -47,6 +87,9 @@ from torch_corruptions import TorchCorruptions
 
 # Load required objects
 model_loader = ModelLoader()
+model_loader.load_model('yolov11')
+model_loader.load_model('detr')
+
 evaluator = COCOEvaluator(annotation_file, image_dir)
 corruptor = TorchCorruptions(device='cuda')
 category_names = format_coco_label_mapping()
@@ -54,7 +97,7 @@ category_names = format_coco_label_mapping()
 # Generate report with qualitative examples
 generator = RobustnessReportGenerator(output_dir='static')
 pdf_path = generator.generate_report(
-    detectors=['YOLO11', 'Faster R-CNN V2'],
+    detectors=['YOLO11', 'DETR'],
     corruptions=['gaussian_noise', 'motion_blur'],
     results=test_results_dict,
     dataset_name='COCO Val2017',
@@ -72,71 +115,133 @@ pdf_path = generator.generate_report(
 
 ### Qualitative Examples Format
 
-For each corruption type, the report will show:
-- **3 grids** (one per randomly selected image)
-- Each grid shows: **detectors × severity levels** (rows × columns)
+For each corruption type, the report shows:
+- **N grids** (one per randomly selected image)
+- Each grid layout: **detectors (rows) × severity levels (columns)**
+- **Color-coded bounding boxes** by detector (no labels for clarity)
 - **Legend** mapping colors to detector names
-- Bounding boxes color-coded by detector (no labels to keep images clean)
 
-## Adding New Pages
+## Report Structure
 
-To add a new page to the report:
+1. **Title Page** (blue background)
+   - Project title
+   - List of tested models
+   - Corruption types
+   - Dataset information
 
-1. **Create a new page module** (e.g., `corruption_breakdown_page.py`):
-   ```python
-   def create_corruption_breakdown_page(results, styles):
-       """
-       Create a page showing detailed corruption analysis
-       
-       Args:
-           results: Test results dictionary
-           styles: StyleSheet object
-           
-       Returns:
-           list: Flowable elements for the page
-       """
-       elements = []
-       # Add your page content...
-       return elements
-   ```
+2. **Table of Contents** (white background)
+   - Clickable navigation links
+   - Section numbering
 
-2. **Import in `__init__.py`**:
-   ```python
-   from .corruption_breakdown_page import create_corruption_breakdown_page
-   ```
+3. **mAP Comparison Page**
+   - Results table with models ranked by clean mAP
+   - Metrics: Clean mAP, Avg Corrupted mAP, Degradation, Robustness Score
+   - Spider/radar chart for visual comparison
+   - Calculation notes
 
-3. **Add to the report generation** in `__init__.py` `generate_report()` method:
-   ```python
-   # 3. Corruption breakdown page
-   if results:
-       story.extend(create_corruption_breakdown_page(
-           results=results,
-           styles=self.styles
-       ))
-   ```
+4. **Individual Corruption Pages** (one per corruption)
+   - Section title and number
+   - Line plot: mAP vs. severity levels (0-5)
+   - Dual-row table: absolute mAP values + relative degradation %
+   - Qualitative examples (if enabled):
+     - Multiple image grids showing detector performance
+     - Color-coded detection boxes
+     - Notes explaining image selection and thresholds
 
 ## Design Principles
 
-- **Modularity**: Each page is independent and can be tested separately
-- **Reusability**: Common components and styles are centralized
-- **Clarity**: Functions have clear purposes and documentation
-- **Maintainability**: Easy to add, remove, or modify pages
+- **Modularity**: Each page and utility function is independent and reusable
+- **Separation of Concerns**: Constants, styles, utilities, and page logic are separate
+- **DRY Principle**: Common patterns (table styling, plotting) are centralized
+- **Clarity**: Functions are focused and well-documented
+- **Maintainability**: Easy to add, remove, or modify pages and features
 
 ## Color Scheme
 
-All colors are defined in `styles.py`:
-- Primary Blue: `#114584` (headers, titles)
-- White: `#ffffff`
-- Gray shades for text and backgrounds
+All colors are defined in `styles.py` and `constants.py`:
+- **Primary Blue**: `#114584` (headers, titles, primary elements)
+- **White**: `#ffffff`
+- **Gray shades**: For text and backgrounds
+- **MODEL_COLORS**: Consistent 10-color palette for charts and visualizations
 
 ## Testing
 
 Run the test script to verify PDF generation:
+
 ```bash
+cd /path/to/Detector_test
 python pdf_report/test_generator.py
 ```
 
+This will:
+1. Load test results from `static/test_results.json`
+2. Initialize YOLO11 and DETR models
+3. Set up evaluator and corruptor
+4. Generate a complete PDF with qualitative examples
+5. Print the report structure
+
 ## Dependencies
 
-- ReportLab: PDF generation library
-- DejaVu Serif fonts (with automatic fallback to Helvetica)
+- **ReportLab**: PDF generation library
+- **Matplotlib**: For plots and charts
+- **PIL/Pillow**: Image processing
+- **DejaVu Serif fonts**: With automatic fallback to Helvetica
+- **PyTorch**: For corruption generation (qualitative examples only)
+- **COCO API**: For dataset evaluation (qualitative examples only)
+
+## Adding New Features
+
+### Adding a New Page Type
+
+1. Create a new module (e.g., `my_new_page.py`)
+2. Define a function that returns a list of flowable elements:
+   ```python
+   def create_my_new_page(data, styles):
+       """Create my new page."""
+       elements = []
+       # Add your content...
+       return elements
+   ```
+3. Import in `__init__.py`:
+   ```python
+   from .my_new_page import create_my_new_page
+   ```
+4. Add to `generate_report()` method in `RobustnessReportGenerator`
+
+### Adding New Visualizations
+
+Add visualization functions to `visualization_utils.py`:
+```python
+def create_my_plot(data):
+    """Create a custom plot."""
+    # Matplotlib plotting code
+    # ...
+    return RLImage(img_buffer, width=6*inch, height=4*inch)
+```
+
+### Adding New Table Styles
+
+Add style functions to `table_utils.py`:
+```python
+def create_my_table_style(num_rows):
+    """Create a custom table style."""
+    return TableStyle([...])
+```
+
+## Troubleshooting
+
+### Fonts Not Found
+If DejaVu Serif fonts are not available, the system automatically falls back to Helvetica. To use custom fonts, install them system-wide or modify `utils.register_fonts()`.
+
+### Qualitative Examples Failing
+Ensure all required parameters are provided:
+- `model_loader`: with models already loaded
+- `evaluator`: properly initialized with dataset
+- `corruptor`: TorchCorruptions instance
+- `category_names`: dictionary mapping IDs to names
+
+### Memory Issues with Large PDFs
+If generating PDFs with many qualitative examples causes memory issues:
+- Reduce `num_qualitative_images` parameter
+- Process fewer corruptions at once
+- Use smaller images or reduce visualization resolution in `visualization_utils.py`

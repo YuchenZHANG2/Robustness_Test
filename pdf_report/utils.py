@@ -11,6 +11,28 @@ import random
 _SELECTED_IMAGE_IDS = None
 
 
+def register_fonts():
+    """
+    Register DejaVu Serif font family for use in the PDF.
+    Falls back gracefully if fonts are not found.
+    """
+    try:
+        pdfmetrics.registerFont(
+            TTFont('DejaVuSerif', '/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf')
+        )
+        pdfmetrics.registerFont(
+            TTFont('DejaVuSerif-Bold', '/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf')
+        )
+        pdfmetrics.registerFont(
+            TTFont('DejaVuSerif-Italic', '/usr/share/fonts/truetype/dejavu/DejaVuSerif-Italic.ttf')
+        )
+        pdfmetrics.registerFont(
+            TTFont('DejaVuSerif-BoldItalic', '/usr/share/fonts/truetype/dejavu/DejaVuSerif-BoldItalic.ttf')
+        )
+    except Exception as e:
+        print(f"Warning: DejaVu Serif fonts not found, using default fonts. Error: {e}")
+
+
 def select_qualitative_images(evaluator, num_images=3, seed=42):
     """
     Select random image IDs for qualitative examples.
@@ -19,7 +41,7 @@ def select_qualitative_images(evaluator, num_images=3, seed=42):
     Args:
         evaluator: COCOEvaluator instance
         num_images: Number of images to select (default: 3)
-        seed: Random seed for reproducibility
+        seed: Random seed for reproducibility (default: 42)
         
     Returns:
         List of selected image IDs
@@ -45,43 +67,21 @@ def get_qualitative_images():
 
 
 def reset_qualitative_images():
-    """Reset the selected qualitative images (useful for testing)."""
+    """Reset the selected qualitative images (useful for testing and new reports)."""
     global _SELECTED_IMAGE_IDS
     _SELECTED_IMAGE_IDS = None
 
 
-def register_fonts():
-    """
-    Register DejaVu Serif font family for use in the PDF
-    
-    Falls back gracefully if fonts are not found
-    """
-    try:
-        pdfmetrics.registerFont(
-            TTFont('DejaVuSerif', '/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf')
-        )
-        pdfmetrics.registerFont(
-            TTFont('DejaVuSerif-Bold', '/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf')
-        )
-        pdfmetrics.registerFont(
-            TTFont('DejaVuSerif-Italic', '/usr/share/fonts/truetype/dejavu/DejaVuSerif-Italic.ttf')
-        )
-        pdfmetrics.registerFont(
-            TTFont('DejaVuSerif-BoldItalic', '/usr/share/fonts/truetype/dejavu/DejaVuSerif-BoldItalic.ttf')
-        )
-    except Exception as e:
-        print(f"Warning: DejaVu Serif fonts not found, using default fonts. Error: {e}")
-
-
 def calculate_metrics(model_data):
     """
-    Calculate robustness metrics for a model
+    Calculate robustness metrics for a model.
     
     Args:
-        model_data: Dictionary containing model test results
+        model_data: Dictionary containing model test results with structure:
+                   {'clean': {'mAP': float}, 'corrupted': {corruption: {severity: {'mAP': float}}}}
         
     Returns:
-        dict: Contains clean_map, avg_corrupt, degradation, robustness_score
+        dict: Contains clean_map, avg_corrupt, degradation, robustness_score, or None if no data
     """
     clean_map = model_data['clean']['mAP']
     
@@ -108,12 +108,12 @@ def calculate_metrics(model_data):
 
 def format_corruption_name(corruption_name):
     """
-    Format corruption name for display (e.g., 'gaussian_noise' -> 'Gaussian Noise')
+    Format corruption name for display (e.g., 'gaussian_noise' -> 'Gaussian Noise').
     
     Args:
-        corruption_name: Raw corruption name string
+        corruption_name: Raw corruption name string with underscores
         
     Returns:
-        str: Formatted name
+        str: Formatted name with title case and spaces
     """
     return corruption_name.replace('_', ' ').title()

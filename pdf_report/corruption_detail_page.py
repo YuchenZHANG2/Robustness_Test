@@ -124,7 +124,7 @@ def _create_severity_plot(corruption_name, results):
     ax.set_xticks(severities)
     ax.set_xticklabels(['Clean', '1', '2', '3', '4', '5'])
     ax.grid(True, alpha=0.3, linestyle='--')
-    ax.legend(loc='best', fontsize=9, framealpha=0.9)
+    ax.legend(loc='best', fontsize=9, framealpha=0.9, frameon=False)
     
     plt.tight_layout()
     

@@ -227,7 +227,7 @@ def _create_spider_chart(results, styles):
     ax.set_yticks(yticks)
     ax.set_yticklabels([f'{int(t)}' for t in yticks], fontsize=10, color='gray')
     ax.grid(True, linestyle='--', alpha=0.5)
-    ax.legend(loc='center left', bbox_to_anchor=(1.15, 0.5), fontsize=10,frameon=False)
+    ax.legend(loc='center left', bbox_to_anchor=(1.15, 0.5), fontsize=12,frameon=False)
     
     # Ensure circular shape
     ax.set_aspect('equal')

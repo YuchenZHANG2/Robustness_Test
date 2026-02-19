@@ -92,7 +92,7 @@ def print_report_structure(pdf_path, results, corruptions):
         results: Test results dictionary
         corruptions: List of corruption types
     """
-    print(f"\n✅ PDF generated successfully: {pdf_path}")
+    print(f"\nPDF generated successfully: {pdf_path}")
     print("\n📄 Report contents:")
     print("   ├─ Page 1: Title page (blue background)")
     print("   │  ├─ Project title")
@@ -152,7 +152,7 @@ def test_pdf_generation():
     # Get detector names from results
     detector_names = [model_data['name'] for model_data in results.values()]
     
-    print("🔄 Initializing models and dataset for qualitative examples...")
+    print("Initializing models and dataset for qualitative examples...")
     
     # Initialize ModelLoader and load models
     model_loader = ModelLoader()
@@ -162,7 +162,7 @@ def test_pdf_generation():
     evaluator, corruptor, category_names = initialize_evaluator_and_corruptor()
     
     # Generate PDF with qualitative examples
-    print("\n📝 Generating PDF report with qualitative examples...")
+    print("\nGenerating PDF report with qualitative examples...")
     print("   This will take several minutes as it runs inference on-the-fly")
     
     generator = RobustnessReportGenerator()

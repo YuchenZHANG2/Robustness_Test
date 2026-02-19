@@ -33,7 +33,7 @@ def register_fonts():
         print(f"Warning: DejaVu Serif fonts not found, using default fonts. Error: {e}")
 
 
-def select_qualitative_images(evaluator, num_images=3, seed=42):
+def select_qualitative_images(evaluator, num_images=3, seed=None):
     """
     Select random image IDs for qualitative examples.
     This should be called once at the start of report generation.
@@ -41,7 +41,7 @@ def select_qualitative_images(evaluator, num_images=3, seed=42):
     Args:
         evaluator: COCOEvaluator instance
         num_images: Number of images to select (default: 3)
-        seed: Random seed for reproducibility (default: 42)
+        seed: Random seed for reproducibility (default: None = truly random)
         
     Returns:
         List of selected image IDs
@@ -49,7 +49,8 @@ def select_qualitative_images(evaluator, num_images=3, seed=42):
     global _SELECTED_IMAGE_IDS
     
     if _SELECTED_IMAGE_IDS is None:
-        random.seed(seed)
+        if seed is not None:
+            random.seed(seed)
         all_img_ids = evaluator.get_all_images()
         _SELECTED_IMAGE_IDS = random.sample(all_img_ids, min(num_images, len(all_img_ids)))
     

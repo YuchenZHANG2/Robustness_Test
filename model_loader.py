@@ -97,7 +97,6 @@ MODEL_CONFIGS = {
     },
 }
 
-
 class ModelLoader:
     """Handles loading and managing object detection models."""
     
@@ -159,6 +158,8 @@ class ModelLoader:
     
     def _load_huggingface_model(self, config, progress_callback=None):
         """Load a Hugging Face model."""
+        import warnings
+        
         if progress_callback:
             progress_callback(1, 3, "Loading image processor...")
         
@@ -168,7 +169,11 @@ class ModelLoader:
         if progress_callback:
             progress_callback(2, 3, "Loading model weights...")
         
-        model = AutoModelForObjectDetection.from_pretrained(config['hf_model_id'])
+        # Suppress PyTorch meta tensor warning during model loading
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', message='.*copying from a non-meta parameter.*')
+            model = AutoModelForObjectDetection.from_pretrained(config['hf_model_id'])
+        
         model = model.to(self.device)
         model.eval()
         

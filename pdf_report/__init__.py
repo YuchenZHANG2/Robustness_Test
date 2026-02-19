@@ -101,7 +101,7 @@ class RobustnessReportGenerator:
             story.extend(create_table_of_contents(
                 corruptions=all_corruptions,
                 styles=self.styles,
-                show_page_numbers=True
+                show_page_numbers=False
             ))
         
         # 3. mAP Comparison page (white background) - if results provided

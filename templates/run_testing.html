@@ -65,12 +65,11 @@ function pollProgress() {
 }
 
 window.onload = () => {
-    updateProgress({progress: 5, message: 'Starting test...'});
+    updateProgress({progress: 0, message: 'Starting test...'});
     fetch('/execute_test')
         .then(res => res.json())
         .then(data => {
             if (data.success) {
-                updateProgress({progress: 10, message: 'Test running in background...'});
                 progressInterval = setInterval(pollProgress, 2000);
             } else {
                 updateProgress({progress: 0, message: 'Error: ' + data.error});

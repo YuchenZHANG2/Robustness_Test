@@ -88,3 +88,79 @@ def fig_to_base64(fig):
     img_base64 = base64.b64encode(buf.read()).decode('utf-8')
     plt.close(fig)
     return img_base64
+
+
+def visualize_predictions_pdf(image, predictions, category_names, detector_color='blue',
+                               score_threshold=0.3, max_boxes=50, show_labels=True):
+    """
+    Visualize object detection predictions for PDF report with specific detector color.
+    
+    Args:
+        image: PIL Image or numpy array
+        predictions: Dict with 'boxes', 'labels', 'scores'
+        category_names: Dict mapping category IDs to names
+        detector_color: Color for this detector's boxes (matplotlib color name or hex)
+        score_threshold: Minimum score to display
+        max_boxes: Maximum number of boxes to show
+        show_labels: Whether to show labels and scores
+    
+    Returns:
+        PIL Image of the visualization
+    """
+    if isinstance(image, Image.Image):
+        img_array = np.array(image)
+    else:
+        img_array = image
+    
+    # Create figure without axes or margins
+    fig, ax = plt.subplots(1, figsize=(4, 3), dpi=100)
+    ax.imshow(img_array)
+    
+    boxes = predictions['boxes']
+    labels = predictions['labels']
+    scores = predictions['scores']
+    
+    # Filter by score and limit number
+    keep_mask = scores >= score_threshold
+    boxes = boxes[keep_mask][:max_boxes]
+    labels = labels[keep_mask][:max_boxes]
+    scores = scores[keep_mask][:max_boxes]
+    
+    for box, label, score in zip(boxes, labels, scores):
+        x1, y1, x2, y2 = box
+        width = x2 - x1
+        height = y2 - y1
+        
+        # Draw bounding box with detector-specific color
+        rect = patches.Rectangle(
+            (x1, y1), width, height,
+            linewidth=3, edgecolor=detector_color, facecolor='none'
+        )
+        ax.add_patch(rect)
+        
+        if show_labels:
+            # Get category name
+            cat_name = category_names.get(int(label), f'Class {label}')
+            
+            # Add label with score (smaller font for PDF)
+            label_text = f'{cat_name}: {score:.2f}'
+            ax.text(
+                x1, y1 - 2,
+                label_text,
+                bbox=dict(boxstyle='round,pad=0.2', facecolor=detector_color, alpha=0.7),
+                fontsize=6,
+                color='white',
+                weight='bold'
+            )
+    
+    ax.axis('off')
+    plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
+    
+    # Convert to PIL Image
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png', dpi=100, bbox_inches='tight', pad_inches=0)
+    buf.seek(0)
+    pil_img = Image.open(buf)
+    plt.close(fig)
+    
+    return pil_img

@@ -11,13 +11,15 @@ from evaluator import COCOEvaluator, format_coco_label_mapping
 from visualization import visualize_predictions, fig_to_base64
 from batch_optimized_pipeline import BatchOptimizedRobustnessTest
 from pdf_report import RobustnessReportGenerator
+from torch_corruptions import TorchCorruptions
 
 # Global variable to track test progress
 test_progress = {
     'status': 'idle',  # idle, running, completed, error
     'progress': 0,
     'message': '',
-    'results_ready': False
+    'results_ready': False,
+    'pdf_path': None
 }
 
 app = Flask(__name__)
@@ -326,6 +328,11 @@ def execute_test():
     corruptions = session.get('selected_corruptions', [])
     image_ids = session.get('test_image_ids', [])
     
+    # Capture session values before starting background thread
+    generate_pdf = session.get('generate_pdf', False)
+    selected_detectors = session.get('selected_detectors', [])
+    dataset_name = session.get('selected_dataset', 'Unknown')
+    
     # Add custom HuggingFace model to MODEL_CONFIGS if provided
     if custom_detector_hf:
         custom_key = 'custom_hf'
@@ -368,7 +375,8 @@ def execute_test():
             
             def progress_callback(current, total, message):
                 global test_progress
-                test_progress['progress'] = int((current / total) * 100)
+                # Scale test progress to 0-90%
+                test_progress['progress'] = int((current / total) * 90)
                 test_progress['message'] = message
             
             results = test.run_full_test(
@@ -381,11 +389,76 @@ def execute_test():
             
             test.save_results('static/test_results.json')
             
+            # Update progress after test completion (90%)
+            test_progress.update({
+                'status': 'running',
+                'progress': 90,
+                'message': 'Test completed, preparing results...'
+            })
+            
+            # Generate PDF if requested
+            pdf_path = None
+            if generate_pdf:
+                try:
+                    test_progress.update({
+                        'progress': 92,
+                        'message': 'Generating PDF report...'
+                    })
+                    
+                    # Load results from JSON file to ensure proper data structure
+                    # (JSON converts integer keys to strings, which the PDF generator expects)
+                    import json
+                    with open('static/test_results.json', 'r') as f:
+                        saved_results = json.load(f)
+                    
+                    # Sort results by clean mAP
+                    sorted_results = dict(sorted(
+                        saved_results.items(),
+                        key=lambda x: x[1].get('clean', {}).get('mAP', 0),
+                        reverse=True
+                    ))
+                    
+                    # Get detector names
+                    detector_names = [PREDEFINED_DETECTORS.get(key, key) for key in selected_detectors]
+                    if custom_detector_hf:
+                        detector_names.append(f"Custom: {custom_detector_hf}")
+                    
+                    # Initialize TorchCorruptions for qualitative examples
+                    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+                    corruptor = TorchCorruptions(device=device)
+                    
+                    # Get category names mapping for COCO format
+                    coco_category_names = format_coco_label_mapping()
+                    
+                    # Generate PDF with qualitative examples
+                    generator = RobustnessReportGenerator()
+                    pdf_path = generator.generate_report(
+                        detectors=detector_names,
+                        corruptions=corruptions,
+                        results=sorted_results,
+                        dataset_name=dataset_name,
+                        model_loader=model_loader,
+                        evaluator=evaluator,
+                        corruptor=corruptor,
+                        category_names=coco_category_names,
+                        include_qualitative=True,
+                        num_qualitative_images=3
+                    )
+                    # Make path relative for web serving
+                    pdf_path = pdf_path.replace('static/', '')
+                    
+                except Exception as e:
+                    print(f"Error generating PDF: {str(e)}")
+                    import traceback
+                    traceback.print_exc()
+            
+            # Final update - 100% complete
             test_progress.update({
                 'status': 'completed',
                 'progress': 100,
-                'message': 'Test completed successfully!',
-                'results_ready': True
+                'message': 'All tasks completed successfully!',
+                'results_ready': True,
+                'pdf_path': pdf_path
             })
             
         except Exception as e:
@@ -431,37 +504,8 @@ def show_results():
     # Get category names from evaluator
     category_names = evaluator.get_category_names() if evaluator else {}
     
-    # Generate PDF if requested
-    pdf_path = None
-    if session.get('generate_pdf', False):
-        try:
-            # Get detector names
-            detector_keys = session.get('selected_detectors', [])
-            detector_names = [PREDEFINED_DETECTORS.get(key, key) for key in detector_keys]
-            custom_detector_hf = session.get('custom_detector_hf')
-            if custom_detector_hf:
-                detector_names.append(f"Custom: {custom_detector_hf}")
-            
-            # Get corruptions
-            corruptions = session.get('selected_corruptions', [])
-            
-            # Get dataset name
-            dataset_name = session.get('dataset', 'Unknown')
-            
-            # Generate PDF
-            generator = RobustnessReportGenerator()
-            pdf_path = generator.generate_report(
-                detectors=detector_names,
-                corruptions=corruptions,
-                results=sorted_results,
-                dataset_name=dataset_name
-            )
-            # Make path relative for web serving
-            pdf_path = pdf_path.replace('static/', '')
-        except Exception as e:
-            print(f"Error generating PDF: {e}")
-            import traceback
-            traceback.print_exc()
+    # Get PDF path from test progress (generated during background test)
+    pdf_path = test_progress.get('pdf_path')
     
     return render_template('show_results.html', 
                          results=sorted_results, 

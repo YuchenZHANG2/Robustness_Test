@@ -12,7 +12,7 @@ import os
 
 from .styles import create_styles
 from .components import add_blue_background, add_white_background
-from .utils import register_fonts
+from .utils import register_fonts, select_qualitative_images, reset_qualitative_images
 from .title_page import create_title_page
 from .table_of_contents_page import create_table_of_contents
 from .map_comparison_page import create_map_comparison_page
@@ -42,7 +42,9 @@ class RobustnessReportGenerator:
         register_fonts()
         self.styles = create_styles()
     
-    def generate_report(self, detectors, corruptions, results=None, dataset_name=None):
+    def generate_report(self, detectors, corruptions, results=None, dataset_name=None,
+                       model_loader=None, evaluator=None, corruptor=None, category_names=None,
+                       include_qualitative=True, num_qualitative_images=3):
         """
         Generate a complete PDF report for robustness testing
         
@@ -51,10 +53,24 @@ class RobustnessReportGenerator:
             corruptions: List of corruption types applied
             results: Dictionary of test results (optional)
             dataset_name: Name of the dataset used (optional)
+            model_loader: ModelLoader instance (optional, for qualitative examples)
+            evaluator: COCOEvaluator instance (optional, for qualitative examples)
+            corruptor: TorchCorruptions instance (optional, for qualitative examples)
+            category_names: Dict mapping category IDs to names (optional, for qualitative examples)
+            include_qualitative: Whether to include qualitative examples (default: True)
+            num_qualitative_images: Number of images to show in qualitative section (default: 3)
         
         Returns:
             str: Path to the generated PDF file
         """
+        # Reset any previously selected images
+        reset_qualitative_images()
+        
+        # Select random images for qualitative examples if requested
+        if include_qualitative and all([model_loader, evaluator, corruptor, category_names]):
+            print(f"Selecting {num_qualitative_images} random images for qualitative examples...")
+            select_qualitative_images(evaluator, num_images=num_qualitative_images)
+        
         # Generate filename with timestamp
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"robustness_report_{timestamp}.pdf"
@@ -98,12 +114,18 @@ class RobustnessReportGenerator:
             
             # 4. Corruption detail pages - one page per corruption
             # Generate a page for each corruption with section numbering
+            can_generate_qualitative = include_qualitative and all([model_loader, evaluator, corruptor, category_names])
+            
             for idx, corruption in enumerate(sorted(all_corruptions), start=1):
                 story.extend(create_corruption_detail_page(
                     corruption_name=corruption,
                     results=results,
                     styles=self.styles,
-                    section_number=f'2.{idx}'
+                    section_number=f'2.{idx}',
+                    model_loader=model_loader if can_generate_qualitative else None,
+                    evaluator=evaluator if can_generate_qualitative else None,
+                    corruptor=corruptor if can_generate_qualitative else None,
+                    category_names=category_names if can_generate_qualitative else None
                 ))
         
         # Build PDF

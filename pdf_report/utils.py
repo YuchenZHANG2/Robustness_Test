@@ -3,6 +3,51 @@ Utility functions for PDF generation
 """
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
+import random
+
+
+# Global variable to store selected image IDs for qualitative examples
+# This ensures the same images are used across all corruption types
+_SELECTED_IMAGE_IDS = None
+
+
+def select_qualitative_images(evaluator, num_images=3, seed=42):
+    """
+    Select random image IDs for qualitative examples.
+    This should be called once at the start of report generation.
+    
+    Args:
+        evaluator: COCOEvaluator instance
+        num_images: Number of images to select (default: 3)
+        seed: Random seed for reproducibility
+        
+    Returns:
+        List of selected image IDs
+    """
+    global _SELECTED_IMAGE_IDS
+    
+    if _SELECTED_IMAGE_IDS is None:
+        random.seed(seed)
+        all_img_ids = evaluator.get_all_images()
+        _SELECTED_IMAGE_IDS = random.sample(all_img_ids, min(num_images, len(all_img_ids)))
+    
+    return _SELECTED_IMAGE_IDS
+
+
+def get_qualitative_images():
+    """
+    Get the selected qualitative image IDs.
+    
+    Returns:
+        List of image IDs or None if not yet selected
+    """
+    return _SELECTED_IMAGE_IDS
+
+
+def reset_qualitative_images():
+    """Reset the selected qualitative images (useful for testing)."""
+    global _SELECTED_IMAGE_IDS
+    _SELECTED_IMAGE_IDS = None
 
 
 def register_fonts():

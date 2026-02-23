@@ -8,7 +8,7 @@ from .styles import COLORS
 from .utils import format_corruption_name
 
 
-def create_title_page(detectors, corruptions, dataset_name, styles):
+def create_title_page(detectors, corruptions, dataset_name, styles, has_ood=False):
     """
     Create the title page of the report with blue background
     
@@ -17,6 +17,7 @@ def create_title_page(detectors, corruptions, dataset_name, styles):
         corruptions: List of corruption types
         dataset_name: Name of the dataset used
         styles: StyleSheet object with all styles
+        has_ood: Whether OOD testing is included (default: False)
         
     Returns:
         list: List of flowable elements for the title page
@@ -40,7 +41,7 @@ def create_title_page(detectors, corruptions, dataset_name, styles):
     elements.append(Spacer(1, 0.5*inch))
     
     # Create information table
-    elements.append(_create_info_table(detectors, corruptions, dataset_name, styles))
+    elements.append(_create_info_table(detectors, corruptions, dataset_name, styles, has_ood))
     
     # Add second separator line
     elements.append(Spacer(1, 0.5*inch))
@@ -76,15 +77,16 @@ def _create_separator_line():
     return line_table
 
 
-def _create_info_table(detectors, corruptions, dataset_name, styles):
+def _create_info_table(detectors, corruptions, dataset_name, styles, has_ood=False):
     """
-    Create the information table with tested models, corruptions, and dataset
+    Create the information table with tested models, evaluation types, and dataset
     
     Args:
         detectors: List of detector names
         corruptions: List of corruption types
         dataset_name: Name of the dataset
         styles: StyleSheet object
+        has_ood: Whether OOD testing is included (default: False)
         
     Returns:
         Table: Information table
@@ -98,11 +100,13 @@ def _create_info_table(detectors, corruptions, dataset_name, styles):
         Paragraph(detectors_bullets, styles['ContentText'])
     ])
     
-    # 2. Corruption Types
+    # 2. Evaluation Types
     formatted_corruptions = [format_corruption_name(c) for c in corruptions]
+    if has_ood:
+        formatted_corruptions.append('Out-of-Distribution')
     corruptions_bullets = '<br/>'.join([f"• {c}" for c in formatted_corruptions])
     table_data.append([
-        Paragraph('<b>Corruption Types:</b>', styles['SectionLabel']),
+        Paragraph('<b>Evaluation Types:</b>', styles['SectionLabel']),
         Paragraph(corruptions_bullets, styles['ContentText'])
     ])
     

@@ -95,6 +95,40 @@
         </div>
     </div>
     
+    {% if ood_results %}
+    <div class="section">
+        <h3>Out-of-Distribution (OOD) Analysis Summary</h3>
+        <p class="help-text">Evaluation on OpenImages dataset showing overall OOD recall for each detector.</p>
+        <p class="help-text"><em>Detailed per-class analysis is available in the PDF report.</em></p>
+        
+        <!-- Overall OOD Recall Summary Table (ordered by recall) -->
+        <div class="ood-summary-section">
+            <h4>Overall OOD Recall by Detector</h4>
+            <table class="results-table">
+                <thead>
+                    <tr>
+                        <th>Rank</th>
+                        <th>Model</th>
+                        <th>Overall OOD Recall</th>
+                        <th>Detected / Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% set sorted_ood = ood_results.items()|sort(attribute='1.general_ood_recall', reverse=True) %}
+                    {% for model_key, ood_data in sorted_ood %}
+                    <tr>
+                        <td>{{ loop.index }}</td>
+                        <td><strong>{{ results[model_key].name if model_key in results else model_key }}</strong></td>
+                        <td><span class="robustness-score">{{ "%.3f"|format(ood_data.general_ood_recall) }}</span></td>
+                        <td>{{ ood_data.total_ood_detected }} / {{ ood_data.total_ood_gt }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+    
     <div class="button-group">
         <a href="{{ url_for('step1') }}" class="btn btn-primary">Start New Test</a>
         <button onclick="downloadResults()" class="btn btn-info">Download Detailed Results (JSON)</button>
@@ -399,6 +433,10 @@
         createPlot(corruption, plotData[corruption], index);
     });
     
+    // Generate OOD confusion heatmaps
+    {% if ood_results %}
+    {% endif %}
+    
     function downloadResults() {
         window.location.href = '/static/test_results.json';
     }
@@ -583,6 +621,11 @@
         margin-bottom: 15px;
         text-align: center;
         font-weight: 600;
+    }
+    
+    /* OOD-specific styles */
+    .ood-summary-section {
+        margin: 20px 0;
     }
     
     @media (max-width: 768px) {

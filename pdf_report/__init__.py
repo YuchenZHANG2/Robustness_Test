@@ -17,6 +17,7 @@ from .title_page import create_title_page
 from .table_of_contents_page import create_table_of_contents
 from .map_comparison_page import create_map_comparison_page
 from .corruption_detail_page import create_corruption_detail_page
+from .ood_detail_page import create_ood_detail_page
 
 
 class RobustnessReportGenerator:
@@ -44,7 +45,7 @@ class RobustnessReportGenerator:
     
     def generate_report(self, detectors, corruptions, results=None, dataset_name=None,
                        model_loader=None, evaluator=None, corruptor=None, category_names=None,
-                       include_qualitative=True, num_qualitative_images=3):
+                       include_qualitative=True, num_qualitative_images=3, ood_results=None):
         """
         Generate a complete PDF report for robustness testing
         
@@ -59,6 +60,7 @@ class RobustnessReportGenerator:
             category_names: Dict mapping category IDs to names (optional, for qualitative examples)
             include_qualitative: Whether to include qualitative examples (default: True)
             num_qualitative_images: Number of images to show in qualitative section (default: 3)
+            ood_results: Dictionary of OOD evaluation results (optional)
         
         Returns:
             str: Path to the generated PDF file
@@ -82,12 +84,16 @@ class RobustnessReportGenerator:
         # Build content
         story = []
         
+        # Determine if OOD testing is included
+        has_ood = ood_results is not None and len(ood_results) > 0
+        
         # 1. Title page (blue background)
         story.extend(create_title_page(
             detectors=detectors,
             corruptions=corruptions,
             dataset_name=dataset_name,
-            styles=self.styles
+            styles=self.styles,
+            has_ood=has_ood
         ))
         
         # 2. Table of Contents (white background) - if results provided
@@ -101,7 +107,8 @@ class RobustnessReportGenerator:
             story.extend(create_table_of_contents(
                 corruptions=all_corruptions,
                 styles=self.styles,
-                show_page_numbers=False
+                show_page_numbers=False,
+                has_ood=has_ood
             ))
         
         # 3. mAP Comparison page (white background) - if results provided
@@ -127,6 +134,18 @@ class RobustnessReportGenerator:
                     corruptor=corruptor if can_generate_qualitative else None,
                     category_names=category_names if can_generate_qualitative else None
                 ))
+        
+        # 5. OOD Analysis section (if OOD results provided)
+        if ood_results and results:
+            # Build model names map from results
+            model_names_map = {key: data['name'] for key, data in results.items()}
+            
+            story.extend(create_ood_detail_page(
+                ood_results=ood_results,
+                model_names_map=model_names_map,
+                category_names=category_names if category_names else {},
+                styles=self.styles
+            ))
         
         # Build PDF
         doc.build(story)

@@ -8,7 +8,7 @@ from .styles import COLORS
 from .utils import format_corruption_name
 
 
-def create_table_of_contents(corruptions, styles, show_page_numbers=True):
+def create_table_of_contents(corruptions, styles, show_page_numbers=True, has_ood=False):
     """
     Create a table of contents page with clickable links to sections
     
@@ -16,6 +16,7 @@ def create_table_of_contents(corruptions, styles, show_page_numbers=True):
         corruptions: List of corruption names
         styles: StyleSheet object with all styles
         show_page_numbers: Whether to show page numbers (default: True)
+        has_ood: Whether OOD testing is included (default: False)
         
     Returns:
         list: List of flowable elements for the TOC page
@@ -40,6 +41,11 @@ def create_table_of_contents(corruptions, styles, show_page_numbers=True):
         page_nums[f'corruption_{corruption}'] = current_page
         current_page += 1
     
+    # OOD page (if present)
+    if has_ood:
+        page_nums['ood_analysis'] = current_page
+        current_page += 1
+    
     # Build TOC entries (two columns: entry and page number)
     toc_data = []
     
@@ -53,8 +59,8 @@ def create_table_of_contents(corruptions, styles, show_page_numbers=True):
     else:
         toc_data.append([Paragraph(entry, styles['TOCEntry']), Paragraph('', styles['TOCPage'])])
     
-    # 2. Individual Corruption Analysis header
-    entry = '<b>2. Individual Corruption Analysis</b>'
+    # 2. Individual Evaluation Analysis header
+    entry = '<b>2. Individual Evaluation Analysis</b>'
     toc_data.append([Paragraph(entry, styles['TOCEntry']), Paragraph('', styles['TOCPage'])])
     
     # 2.x Individual corruption entries (indented with sub-numbering)
@@ -67,6 +73,18 @@ def create_table_of_contents(corruptions, styles, show_page_numbers=True):
             toc_data.append([
                 Paragraph(entry, styles['TOCEntry']),
                 Paragraph(f'{page_nums[anchor_name]}', styles['TOCPage'])
+            ])
+        else:
+            toc_data.append([Paragraph(entry, styles['TOCEntry']), Paragraph('', styles['TOCPage'])])
+    
+    # Add OOD Detection entry at the same level as corruption entries
+    if has_ood:
+        idx = len(corruptions) + 1
+        entry = f'<a href="#ood_analysis" color="{COLORS["primary_blue"]}">&nbsp;&nbsp;&nbsp;&nbsp;2.{idx} OOD Detection</a>'
+        if show_page_numbers:
+            toc_data.append([
+                Paragraph(entry, styles['TOCEntry']),
+                Paragraph(f'{page_nums["ood_analysis"]}', styles['TOCPage'])
             ])
         else:
             toc_data.append([Paragraph(entry, styles['TOCEntry']), Paragraph('', styles['TOCPage'])])

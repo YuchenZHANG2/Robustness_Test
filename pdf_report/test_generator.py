@@ -6,7 +6,7 @@ This script tests the PDF generation functionality with actual test results,
 loading models and generating both quantitative tables and qualitative visualizations.
 """
 import json
-import sys
+import sys.vscode
 import torch
 from pathlib import Path
 
@@ -39,7 +39,7 @@ def load_test_results(results_path):
         dict: Test results, or None if file not found
     """
     if not Path(results_path).exists():
-        print(f"❌ Test results file not found: {results_path}")
+        print(f"  Test results file not found: {results_path}")
         print("   Please run the robustness tests first to generate test_results.json")
         return None
     
@@ -93,7 +93,7 @@ def print_report_structure(pdf_path, results, corruptions):
         corruptions: List of corruption types
     """
     print(f"\nPDF generated successfully: {pdf_path}")
-    print("\n📄 Report contents:")
+    print("\n Report contents:")
     print("   ├─ Page 1: Title page (blue background)")
     print("   │  ├─ Project title")
     print("   │  ├─ Tested models list")

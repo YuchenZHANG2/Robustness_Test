@@ -149,10 +149,10 @@ def create_styles():
     styles.add(ParagraphStyle(
         name='SectionHeader',
         parent=styles['Heading2'],
-        fontSize=16,
+        fontSize=14,
         textColor=HexColor(COLORS['dark_gray']),
-        spaceAfter=12,
-        spaceBefore=20,
+        spaceAfter=5,
+        spaceBefore=12,
         fontName='DejaVuSerif-Bold'
     ))
     

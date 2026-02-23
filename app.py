@@ -12,6 +12,7 @@ from visualization import visualize_predictions, fig_to_base64
 from batch_optimized_pipeline import BatchOptimizedRobustnessTest
 from pdf_report import RobustnessReportGenerator
 from torch_corruptions import TorchCorruptions
+from ood_evaluator import OODEvaluator
 
 # Global variable to track test progress
 test_progress = {
@@ -21,6 +22,9 @@ test_progress = {
     'results_ready': False,
     'pdf_path': None
 }
+
+# OOD evaluation configuration
+TOP_N_OOD_CLASSES = 5  # Number of top frequent OOD classes to analyze (configurable)
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-change-in-production'
@@ -88,7 +92,8 @@ CORRUPTIONS = {
     'Noise': ['gaussian_noise', 'shot_noise', 'impulse_noise'],
     'Blur': ['defocus_blur', 'glass_blur', 'motion_blur', 'zoom_blur'],
     'Weather': ['snow', 'frost', 'fog', 'brightness', 'dust'],
-    'Digital': ['contrast', 'elastic_transform', 'pixelate', 'jpeg_compression']
+    'Digital': ['contrast', 'elastic_transform', 'pixelate', 'jpeg_compression'],
+    'OOD': ['ood']  # Out-of-Distribution detection
 }
 
 # Dataset-specific corruptions
@@ -105,6 +110,11 @@ def get_selected_corruptions(form_data):
             if form_data.get(corruption):
                 selected.append(corruption)
     return selected
+
+
+def is_ood_selected(corruptions):
+    """Check if OOD is selected in corruptions list"""
+    return 'ood' in corruptions
 
 
 @app.route('/')
@@ -323,10 +333,15 @@ def run_testing():
 @app.route('/execute_test')
 def execute_test():
     """Execute the robustness test in background thread"""
+    print("DEBUG: execute_test endpoint called")
+    
     model_keys = session.get('selected_detectors', [])
     custom_detector_hf = session.get('custom_detector_hf')
     corruptions = session.get('selected_corruptions', [])
     image_ids = session.get('test_image_ids', [])
+    
+    print(f"DEBUG: model_keys={model_keys}, custom_detector_hf={custom_detector_hf}")
+    print(f"DEBUG: corruptions={corruptions}, image_ids count={len(image_ids)}")
     
     # Capture session values before starting background thread
     generate_pdf = session.get('generate_pdf', False)
@@ -361,6 +376,10 @@ def execute_test():
     def run_test_background():
         """Background function to run the test"""
         global test_progress
+        import json  # Import at function level to avoid scoping issues
+        
+        print("DEBUG: Background thread started")
+        
         try:
             test_progress.update({
                 'status': 'running',
@@ -368,20 +387,33 @@ def execute_test():
                 'message': 'Initializing test...'
             })
             
+            print("DEBUG: Test progress initialized")
+            
+            # Separate OOD from actual corruptions
+            # OOD is not a corruption, it's a separate evaluation
+            actual_corruptions = [c for c in corruptions if c != 'ood']
+            
+            print(f"DEBUG: Actual corruptions: {actual_corruptions}")
+            print(f"DEBUG: Model keys: {model_keys}")
+            
+            # Run corruption tests (even if empty list, to get clean mAP)
             test = BatchOptimizedRobustnessTest(
                 model_loader, evaluator,
                 batch_size=4, num_workers=2
             )
             
+            print("DEBUG: Test object created")
+            
             def progress_callback(current, total, message):
                 global test_progress
-                # Scale test progress to 0-90%
-                test_progress['progress'] = int((current / total) * 90)
+                # Scale test progress to 0-70% for corruption tests
+                progress_pct = int((current / total) * 70) if total > 0 else 70
+                test_progress['progress'] = progress_pct
                 test_progress['message'] = message
             
             results = test.run_full_test(
                 model_keys=model_keys,
-                corruption_names=corruptions,
+                corruption_names=actual_corruptions,
                 image_ids=image_ids,
                 severities=[1, 2, 3, 4, 5],
                 progress_callback=progress_callback
@@ -389,11 +421,82 @@ def execute_test():
             
             test.save_results('static/test_results.json')
             
-            # Update progress after test completion (90%)
+            # Update progress after test completion
+            test_progress.update({
+                'status': 'running',
+                'progress': 70,
+                'message': 'Corruption tests completed...'
+            })
+            
+            # Run OOD evaluation if selected
+            ood_results = {}
+            if is_ood_selected(corruptions):
+                test_progress.update({
+                    'status': 'running',
+                    'progress': 75,
+                    'message': 'Running OOD evaluation...'
+                })
+                
+                try:
+                    # Initialize OOD evaluator
+                    ood_annotation_file = '/home/yuchen/YuchenZ/lab/Detector_test/OOD_dataset/OpenImage/Dataset_final/labels_new.json'
+                    ood_image_dir = '/home/yuchen/YuchenZ/lab/Detector_test/OOD_dataset/OpenImage/Dataset_final/data'
+                    ood_evaluator_instance = OODEvaluator(
+                        annotation_file=ood_annotation_file,
+                        image_dir=ood_image_dir,
+                        top_n_classes=TOP_N_OOD_CLASSES,
+                        iou_threshold=0.5
+                    )
+                    
+                    # Get all images with OOD annotations
+                    ood_image_ids = ood_evaluator_instance.get_all_ood_images()
+                    print(f"Found {len(ood_image_ids)} images with OOD annotations")
+                    
+                    # Run each model on OOD dataset
+                    for idx, model_key in enumerate(model_keys):
+                        test_progress.update({
+                            'progress': 75 + int((idx / len(model_keys)) * 15),
+                            'message': f'Running OOD evaluation on {model_key}...'
+                        })
+                        
+                        # Collect predictions for all OOD images
+                        model_predictions = {}
+                        for img_id in ood_image_ids:
+                            img_path = ood_evaluator_instance.get_image_path(img_id)
+                            image = Image.open(img_path).convert('RGB')
+                            
+                            # Get predictions
+                            predictions = model_loader.predict(
+                                model_key=model_key,
+                                image=image,
+                                score_threshold=0.1
+                            )
+                            
+                            model_predictions[img_id] = {
+                                'boxes': predictions['boxes'].tolist(),
+                                'labels': predictions['labels'].tolist(),
+                                'scores': predictions['scores'].tolist()
+                            }
+                        
+                        # Evaluate OOD performance
+                        ood_result = ood_evaluator_instance.evaluate_ood(model_predictions)
+                        ood_results[model_key] = ood_result
+                        
+                        print(f"OOD evaluation for {model_key}: Recall={ood_result['general_ood_recall']:.4f}")
+                    
+                    # Save OOD results
+                    with open('static/ood_results.json', 'w') as f:
+                        json.dump(ood_results, f, indent=2)
+                    
+                except Exception as e:
+                    print(f"Error during OOD evaluation: {str(e)}")
+                    import traceback
+                    traceback.print_exc()
+            
             test_progress.update({
                 'status': 'running',
                 'progress': 90,
-                'message': 'Test completed, preparing results...'
+                'message': 'Preparing results...'
             })
             
             # Generate PDF if requested
@@ -407,7 +510,6 @@ def execute_test():
                     
                     # Load results from JSON file to ensure proper data structure
                     # (JSON converts integer keys to strings, which the PDF generator expects)
-                    import json
                     with open('static/test_results.json', 'r') as f:
                         saved_results = json.load(f)
                     
@@ -423,6 +525,20 @@ def execute_test():
                     if custom_detector_hf:
                         detector_names.append(f"Custom: {custom_detector_hf}")
                     
+                    # Load OOD results if they exist
+                    pdf_ood_results = None
+                    ood_results_path = 'static/ood_results.json'
+                    if os.path.exists(ood_results_path):
+                        try:
+                            if os.path.getsize(ood_results_path) > 0:
+                                with open(ood_results_path, 'r') as f:
+                                    pdf_ood_results = json.load(f)
+                        except Exception as e:
+                            print(f"Warning: Could not load OOD results for PDF: {e}")
+                    
+                    # Filter out 'ood' from corruptions list for PDF (it's not a corruption)
+                    actual_corruptions = [c for c in corruptions if c != 'ood']
+                    
                     # Initialize TorchCorruptions for qualitative examples
                     device = 'cuda' if torch.cuda.is_available() else 'cpu'
                     corruptor = TorchCorruptions(device=device)
@@ -434,7 +550,7 @@ def execute_test():
                     generator = RobustnessReportGenerator()
                     pdf_path = generator.generate_report(
                         detectors=detector_names,
-                        corruptions=corruptions,
+                        corruptions=actual_corruptions,
                         results=sorted_results,
                         dataset_name=dataset_name,
                         model_loader=model_loader,
@@ -442,7 +558,8 @@ def execute_test():
                         corruptor=corruptor,
                         category_names=coco_category_names,
                         include_qualitative=True,
-                        num_qualitative_images=3
+                        num_qualitative_images=3,
+                        ood_results=pdf_ood_results
                     )
                     # Make path relative for web serving
                     pdf_path = pdf_path.replace('static/', '')
@@ -466,12 +583,15 @@ def execute_test():
                 'status': 'error',
                 'message': str(e)
             })
+            print(f"ERROR in background thread: {str(e)}")
             import traceback
             traceback.print_exc()
     
+    print("DEBUG: About to start background thread")
     thread = threading.Thread(target=run_test_background)
     thread.daemon = True
     thread.start()
+    print("DEBUG: Background thread started")
     
     return jsonify({'success': True, 'message': 'Test started in background'})
 
@@ -507,11 +627,29 @@ def show_results():
     # Get PDF path from test progress (generated during background test)
     pdf_path = test_progress.get('pdf_path')
     
+    # Load OOD results if available
+    ood_results = None
+    ood_results_path = 'static/ood_results.json'
+    if os.path.exists(ood_results_path):
+        try:
+            # Check if file is not empty
+            if os.path.getsize(ood_results_path) > 0:
+                with open(ood_results_path, 'r') as f:
+                    ood_results = json.load(f)
+            else:
+                print("Warning: ood_results.json exists but is empty")
+        except json.JSONDecodeError as e:
+            print(f"Warning: Failed to load OOD results: {e}")
+        except Exception as e:
+            print(f"Warning: Error reading OOD results: {e}")
+    
     return render_template('show_results.html', 
                          results=sorted_results, 
                          plot_data=plot_data,
                          category_names=json.dumps(category_names),
-                         pdf_path=pdf_path)
+                         pdf_path=pdf_path,
+                         ood_results=ood_results,
+                         top_n_ood=TOP_N_OOD_CLASSES)
 
 
 def generate_corruption_plots(results):
@@ -581,6 +719,10 @@ def interactive_preview():
     print(f"DEBUG: session = {dict(session)}")
     
     corruptions = session.get('selected_corruptions', [])
+    
+    # Exclude OOD from preview (it's not a visual corruption)
+    corruptions = [c for c in corruptions if c != 'ood']
+    
     if not corruptions:
         print("ERROR: No corruptions in session, redirecting to step2")
         return redirect(url_for('step2'))

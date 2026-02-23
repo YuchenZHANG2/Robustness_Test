@@ -41,8 +41,10 @@
         <div class="section corruption-category">
             <div class="category-header">
                 <h3>{{ category }}
+                    {% if category != 'OOD' %}
                     <button type="button" class="btn-category select-all" data-category="{{ category }}">Select All</button>
                     <button type="button" class="btn-category deselect-all" data-category="{{ category }}">Deselect All</button>
+                    {% endif %}
                 </h3>
             </div>
             
@@ -62,8 +64,14 @@
                     <label for="{{ corruption }}" 
                            {% if corruption in dataset_specific_corruptions %}
                            title="Only available for {{ dataset_specific_corruptions[corruption]|join(', ') }} dataset"
+                           {% elif corruption == 'ood' %}
+                           title="Out-of-Distribution detection on OpenImages dataset"
                            {% endif %}>
+                        {% if corruption == 'ood' %}
+                        Out-of-Distribution
+                        {% else %}
                         {{ corruption.replace('_', ' ').title() }}
+                        {% endif %}
                     </label>
                 </div>
                 {% endfor %}

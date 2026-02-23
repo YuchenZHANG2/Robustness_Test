@@ -64,13 +64,7 @@ def create_ood_detail_page(
         '<a name="ood_analysis"/>3. Out-of-Distribution (OOD) Analysis', 
         styles['ContentPageTitle']
     ))
-    
-    # Page subtitle
-    elements.append(Paragraph(
-        "Evaluation on OpenImages dataset (category_id > 90)",
-        styles['ContentPageSubtitle']
-    ))
-    elements.append(Spacer(1, 0.3*inch))
+
     
     # Section 3.1: Overall OOD Recall Summary
     elements.append(Paragraph(
@@ -322,7 +316,7 @@ def _create_class_analysis(
     
     # Subsection title
     elements.append(Paragraph(
-        f"<b>{subsection_number} {class_name}</b>",
+        f"<b>{subsection_number} OOD Class: {class_name}</b>",
         styles['SectionHeader']
     ))
     elements.append(Spacer(1, 0.15*inch))

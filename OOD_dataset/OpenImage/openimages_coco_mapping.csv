@@ -1,0 +1,602 @@
+OpenImages,Status,COCO_Class
+accordion,OUT,
+adhesive tape,OUT,
+aircraft,IN,airplane
+airplane,IN,airplane
+alarm clock,OUT,
+alpaca,OUT,
+ambulance,IN,truck
+animal,IGNORE,
+ant,OUT,
+antelope,OUT,
+apple,IN,apple
+armadillo,OUT,
+artichoke,OUT,
+asparagus,OUT,
+auto part,IGNORE,
+axe,OUT,
+backpack,IN,backpack
+bagel,OUT,
+baked goods,OUT,
+balance beam,OUT,
+ball,IN,sports ball
+balloon,OUT,
+banana,IN,banana
+band-aid,OUT,
+banjo,OUT,
+barge,IN,boat
+barrel,OUT,
+baseball bat,IN,baseball bat
+baseball glove,IN,baseball glove
+bat,OUT,
+bathroom accessory,OUT,
+bathroom cabinet,OUT,
+bathtub,OUT,
+beaker,OUT,
+bear,IN,bear
+bed,IN,bed
+bee,OUT,
+beehive,OUT,
+beer,OUT,
+beetle,OUT,
+bell pepper,OUT,
+belt,OUT,
+bench,IN,bench
+bicycle,IN,bicycle
+bicycle helmet,OUT,
+bicycle wheel,IGNORE,
+bidet,IGNORE,
+billboard,OUT,
+billiard table,OUT,
+binoculars,OUT,
+bird,IN,bird
+blender,OUT,
+blue jay,IN,bird
+boat,IN,boat
+bomb,OUT,
+book,IN,book
+bookcase,OUT,
+boot,OUT,
+bottle,IN,bottle
+bottle opener,OUT,
+bow and arrow,OUT,
+bowl,IN,bowl
+bowling equipment,OUT,
+box,OUT,
+boy,IN,person
+brassiere,OUT,
+bread,OUT,
+briefcase,OUT,
+broccoli,IN,broccoli
+bronze sculpture,IGNORE,
+brown bear,IN,bear
+building,OUT,
+bull,IN,cow
+burrito,OUT,
+bus,IN,bus
+bust,IN,person
+butterfly,OUT,
+cabbage,OUT,
+cabinetry,OUT,
+cake,IN,cake
+cake stand,OUT,
+calculator,OUT,
+camel,OUT,
+camera,OUT,
+can opener,IGNORE,
+canary,IN,bird
+candle,OUT,
+candy,OUT,
+cannon,OUT,
+canoe,IN,boat
+cantaloupe,OUT,
+car,IN,car
+carnivore,IN,dog
+carrot,IN,carrot
+cart,OUT,
+cassette deck,OUT,
+castle,OUT,
+cat,IN,cat
+cat furniture,OUT,
+caterpillar,OUT,
+cattle,IN,cow
+ceiling fan,OUT,
+cello,OUT,
+centipede,OUT,
+chainsaw,OUT,
+chair,IN,chair
+cheese,OUT,
+cheetah,OUT,
+chest of drawers,OUT,
+chicken,OUT,
+chime,OUT,
+chisel,OUT,
+chopsticks,OUT,
+christmas tree,OUT,
+clock,IN,clock
+closet,OUT,
+clothing,IGNORE,
+coat,OUT,
+cocktail,OUT,
+cocktail shaker,OUT,
+coconut,OUT,
+coffee,OUT,
+coffee cup,IN,cup
+coffee table,OUT,
+coffeemaker,OUT,
+coin,OUT,
+common fig,OUT,
+computer keyboard,IN,keyboard
+computer monitor,OUT,
+computer mouse,IN,mouse
+container,OUT,
+convenience store,IGNORE,
+cookie,OUT,
+cooking spray,IGNORE,
+corded phone,OUT,
+cosmetics,IGNORE,
+couch,IN,couch
+countertop,IGNORE,
+cowboy hat,OUT,
+crab,OUT,
+cream,OUT,
+cricket ball,OUT,
+crocodile,OUT,
+croissant,OUT,
+crown,OUT,
+crutch,OUT,
+cucumber,OUT,
+cupboard,OUT,
+curtain,OUT,
+cutting board,OUT,
+dagger,OUT,
+dairy,OUT,
+deer,OUT,
+desk,OUT,
+dessert,OUT,
+diaper,OUT,
+dice,OUT,
+digital clock,IN,clock
+dinosaur,OUT,
+dishwasher,OUT,
+dog,IN,dog
+dog bed,OUT,
+doll,OUT,
+dolphin,OUT,
+door,OUT,
+door handle,IGNORE,
+doughnut,IN,donut
+dragonfly,OUT,
+drawer,OUT,
+dress,OUT,
+drill,OUT,
+drink,IGNORE,
+drinking straw,OUT,
+drum,OUT,
+duck,OUT,
+dumbbell,OUT,
+eagle,IN,bird
+earrings,OUT,
+egg,OUT,
+elephant,IN,elephant
+envelope,OUT,
+eraser,OUT,
+face powder,OUT,
+facial tissue holder,OUT,
+falcon,IN,bird
+fashion accessory,IGNORE,
+fast food,OUT,
+fax,OUT,
+fedora,OUT,
+filing cabinet,OUT,
+fire hydrant,IN,fire hydrant
+fireplace,OUT,
+fish,OUT,
+flag,OUT,
+flashlight,OUT,
+flower,OUT,
+flowerpot,IN,potted plant
+flute,OUT,
+flying disc,IN,frisbee
+food,IGNORE,
+food processor,OUT,
+football,OUT,
+football helmet,OUT,
+footwear,IGNORE,
+fork,IN,fork
+fountain,OUT,
+fox,OUT,
+french fries,OUT,
+frog,OUT,
+fruit,IGNORE,
+frying pan,OUT,
+furniture,IGNORE,
+gas stove,OUT,
+giraffe,IN,giraffe
+girl,IN,person
+glasses,OUT,
+glove,OUT,
+goat,OUT,
+goggles,OUT,
+goldfish,OUT,
+golf ball,OUT,
+golf cart,OUT,
+gondola,IN,boat
+goose,OUT,
+grape,OUT,
+grapefruit,OUT,
+grinder,OUT,
+guacamole,OUT,
+guitar,OUT,
+hair dryer,IN,hair drier
+hair spray,IGNORE,
+hamburger,OUT,
+hammer,OUT,
+hamster,OUT,
+hand dryer,OUT,
+handbag,IN,handbag
+handgun,OUT,
+harbor seal,OUT,
+harmonica,OUT,
+harp,OUT,
+harpsichord,OUT,
+hat,OUT,
+headphones,OUT,
+heater,OUT,
+hedgehog,OUT,
+helicopter,OUT,
+helmet,OUT,
+high heels,IGNORE,
+hiking equipment,IGNORE,
+hippopotamus,OUT,
+home appliance,IGNORE,
+honeycomb,IGNORE,
+horizontal bar,OUT,
+horn,OUT,
+horse,IN,horse
+hot dog,IN,hot dog
+house,OUT,
+houseplant,OUT,
+human arm,IGNORE,
+human beard,IGNORE,
+human body,IGNORE,
+human ear,IGNORE,
+human eye,IGNORE,
+human face,IGNORE,
+human foot,IGNORE,
+human hair,IGNORE,
+human hand,IGNORE,
+human head,IGNORE,
+human leg,IGNORE,
+human mouth,IGNORE,
+human nose,IGNORE,
+humidifier,OUT,
+ice cream,OUT,
+indoor rower,OUT,
+infant bed,OUT,
+insect,OUT,
+invertebrate,IGNORE,
+ipod,OUT,
+isopod,OUT,
+jacket,OUT,
+jacuzzi,OUT,
+jaguar,OUT,
+jeans,OUT,
+jellyfish,OUT,
+jet ski,OUT,
+jug,OUT,
+juice,IGNORE,
+kangaroo,OUT,
+kettle,OUT,
+kitchen & dining room table,IN,dining table
+kitchen appliance,IGNORE,
+kitchen knife,IN,knife
+kitchen utensil,IGNORE,
+kitchenware,OUT,
+kite,IN,kite
+knife,IN,knife
+koala,OUT,
+ladder,OUT,
+ladle,IN,spoon
+ladybug,OUT,
+lamp,OUT,
+land vehicle,IGNORE,
+lantern,OUT,
+laptop,IN,laptop
+lavender,OUT,
+lemon,OUT,
+leopard,OUT,
+lifejacket,OUT,
+light bulb,OUT,
+light switch,OUT,
+lighthouse,OUT,
+lily,OUT,
+limousine,IN,car
+lion,OUT,
+lipstick,OUT,
+lizard,OUT,
+lobster,OUT,
+loveseat,IN,couch
+luggage and bags,OUT,
+lynx,IN,cat
+magpie,IN,bird
+mammal,IGNORE,
+man,IN,person
+mango,OUT,
+maple,IGNORE,
+maracas,OUT,
+marine invertebrates,OUT,
+marine mammal,OUT,
+measuring cup,IN,cup
+mechanical fan,OUT,
+medical equipment,IGNORE,
+microphone,OUT,
+microwave oven,IN,microwave
+milk,OUT,
+miniskirt,OUT,
+mirror,OUT,
+missile,OUT,
+mixer,OUT,
+mixing bowl,IN,bowl
+mobile phone,IN,cell phone
+monkey,OUT,
+moths and butterflies,OUT,
+motorcycle,IN,motorcycle
+mouse,OUT,
+muffin,OUT,
+mug,IN,cup
+mule,OUT,
+mushroom,OUT,
+musical instrument,IGNORE,
+musical keyboard,OUT,
+nail,OUT,
+necklace,OUT,
+nightstand,OUT,
+oboe,OUT,
+office building,IGNORE,
+office supplies,IGNORE,
+orange,IN,orange
+organ,OUT,
+ostrich,OUT,
+otter,OUT,
+oven,IN,oven
+owl,IN,bird
+oyster,OUT,
+paddle,OUT,
+palm tree,OUT,
+pancake,OUT,
+panda,OUT,
+paper cutter,OUT,
+paper towel,OUT,
+parachute,OUT,
+parking meter,IN,parking meter
+parrot,IN,bird
+pasta,OUT,
+pastry,OUT,
+peach,OUT,
+pear,OUT,
+pen,OUT,
+pencil case,OUT,
+pencil sharpener,OUT,
+penguin,OUT,
+perfume,OUT,
+person,IN,person
+personal care,IGNORE,
+piano,OUT,
+picnic basket,OUT,
+picture frame,OUT,
+pig,OUT,
+pillow,OUT,
+pineapple,OUT,
+pitcher,OUT,
+pizza,IN,pizza
+pizza cutter,OUT,
+plant,OUT,
+plastic bag,OUT,
+plate,OUT,
+platter,OUT,
+plumbing fixture,OUT,
+polar bear,OUT,
+pomegranate,OUT,
+popcorn,OUT,
+porch,IGNORE,
+porcupine,IGNORE,
+poster,OUT,
+potato,OUT,
+power plugs and sockets,OUT,
+pressure cooker,IGNORE,
+pretzel,OUT,
+printer,OUT,
+pumpkin,OUT,
+punching bag,OUT,
+rabbit,OUT,
+raccoon,OUT,
+racket,OUT,
+radish,OUT,
+ratchet,OUT,
+raven,IN,bird
+rays and skates,OUT,
+red panda,OUT,
+refrigerator,IN,refrigerator
+remote control,IN,remote
+reptile,OUT,
+rhinoceros,OUT,
+rifle,OUT,
+ring binder,OUT,
+rocket,OUT,
+roller skates,OUT,
+rose,OUT,
+rugby ball,OUT,
+ruler,OUT,
+salad,OUT,
+salt and pepper shakers,OUT,
+sandal,IGNORE,
+sandwich,IN,sandwich
+saucer,OUT,
+saxophone,OUT,
+scale,OUT,
+scarf,OUT,
+scissors,IN,scissors
+scoreboard,OUT,
+scorpion,OUT,
+screwdriver,OUT,
+sculpture,IGNORE,
+sea lion,OUT,
+sea turtle,OUT,
+seafood,IGNORE,
+seahorse,OUT,
+seat belt,OUT,
+segway,OUT,
+serving tray,OUT,
+sewing machine,OUT,
+shark,OUT,
+sheep,IN,sheep
+shelf,OUT,
+shellfish,OUT,
+shirt,OUT,
+shorts,OUT,
+shotgun,OUT,
+shower,OUT,
+shrimp,OUT,
+sink,IN,sink
+skateboard,IN,skateboard
+ski,IN,skis
+skirt,OUT,
+skull,IGNORE,
+skunk,OUT,
+skyscraper,IGNORE,
+slow cooker,OUT,
+snack,OUT,
+snail,OUT,
+snake,OUT,
+snowboard,IN,snowboard
+snowman,OUT,
+snowmobile,OUT,
+snowplow,OUT,
+soap dispenser,OUT,
+sock,OUT,
+sofa bed,IN,couch
+sombrero,OUT,
+sparrow,IN,bird
+spatula,OUT,
+spice rack,OUT,
+spider,OUT,
+spoon,IN,spoon
+sports equipment,IGNORE,
+sports uniform,IGNORE,
+squash,OUT,
+squid,OUT,
+squirrel,OUT,
+stairs,OUT,
+stapler,OUT,
+starfish,OUT,
+stationary bicycle,OUT,
+stethoscope,OUT,
+stool,IN,chair
+stop sign,IN,stop sign
+strawberry,OUT,
+street light,OUT,
+stretcher,OUT,
+studio couch,IN,couch
+submarine,IN,boat
+submarine sandwich,IN,sandwich
+suit,OUT,
+suitcase,IN,suitcase
+sun hat,OUT,
+sunflower,OUT,
+sunglasses,OUT,
+surfboard,IN,surfboard
+sushi,OUT,
+swan,OUT,
+swim cap,OUT,
+swimming pool,OUT,
+swimwear,OUT,
+sword,OUT,
+syringe,OUT,
+table,IN,dining table
+table tennis racket,OUT,
+tablet computer,OUT,
+tableware,OUT,
+taco,OUT,
+tank,OUT,
+tap,OUT,
+tart,OUT,
+taxi,IN,car
+tea,OUT,
+teapot,OUT,
+teddy bear,IN,teddy bear
+telephone,OUT,
+television,IN,tv
+tennis ball,OUT,
+tennis racket,IN,tennis racket
+tent,OUT,
+tiara,OUT,
+tick,OUT,
+tie,IN,tie
+tiger,OUT,
+tin can,OUT,
+tire,IGNORE,
+toaster,IN,toaster
+toilet,IN,toilet
+toilet paper,OUT,
+tomato,OUT,
+tool,OUT,
+toothbrush,IN,toothbrush
+torch,OUT,
+tortoise,OUT,
+towel,OUT,
+tower,OUT,
+toy,IGNORE,
+traffic light,IN,traffic light
+traffic sign,OUT,
+train,IN,train
+training bench,OUT,
+treadmill,OUT,
+tree,OUT,
+tree house,OUT,
+tripod,OUT,
+trombone,OUT,
+trousers,OUT,
+truck,IN,truck
+trumpet,OUT,
+turkey,OUT,
+turtle,OUT,
+umbrella,IN,umbrella
+unicycle,OUT,
+van,IN,truck
+vase,IN,vase
+vegetable,OUT,
+vehicle,IGNORE,
+vehicle registration plate,IGNORE,
+violin,OUT,
+volleyball,OUT,
+waffle,OUT,
+waffle iron,OUT,
+wall clock,IN,clock
+wardrobe,OUT,
+washing machine,OUT,
+waste container,OUT,
+watch,IN,clock
+watercraft,IGNORE,
+watermelon,OUT,
+weapon,IGNORE,
+whale,OUT,
+wheel,IGNORE,
+wheelchair,OUT,
+whisk,OUT,
+whiteboard,OUT,
+willow,OUT,
+window,OUT,
+window blind,OUT,
+wine,OUT,
+wine glass,IN,wine glass
+wine rack,OUT,
+winter melon,OUT,
+wok,OUT,
+woman,IN,person
+wood-burning stove,OUT,
+woodpecker,IN,bird
+worm,OUT,
+wrench,OUT,
+zebra,IN,zebra
+zucchini,OUT,

@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify
 import os
+from pathlib import Path
 from werkzeug.utils import secure_filename
 from PIL import Image
 import threading
@@ -38,17 +39,21 @@ os.makedirs('static/validation', exist_ok=True)
 # Initialize model loader
 model_loader = ModelLoader()
 
+# Base paths
+PROJECT_ROOT = Path(__file__).parent
+COCO_BASE_DIR = PROJECT_ROOT / "Coco"
+
 # Dataset configurations
 DATASET_CONFIG = {
     'COCO': {
-        'annotation_file': '/home/yuchen/YuchenZ/Datasets/coco/annotations/instances_val2017.json',
-        'image_dir': '/home/yuchen/YuchenZ/Datasets/coco/val2017',
+        'annotation_file': str(COCO_BASE_DIR / "annotations" / "instances_val2017.json"),
+        'image_dir': str(COCO_BASE_DIR / "val2017"),
         'filter_classes': None,  # Use all classes
         'class_mapping': None  # No mapping needed (COCO labels are standard)
     },
     'Construction': {
-        'annotation_file': '/home/yuchen/YuchenZ/lab/Detector_test/DustyConstruction.v2i.coco/_annotations.coco.json',
-        'image_dir': '/home/yuchen/YuchenZ/lab/Detector_test/DustyConstruction.v2i.coco/train',
+        'annotation_file': str(PROJECT_ROOT / "DustyConstruction.v2i.coco" / "_annotations.coco.json"),
+        'image_dir': str(PROJECT_ROOT / "DustyConstruction.v2i.coco" / "train"),
         'filter_classes': [3],  # Only evaluate "person" class (id=3 in Construction dataset)
         'class_mapping': {3: 1}  # Map Construction's person (id=3) to COCO's person (id=1)
     }
@@ -242,7 +247,7 @@ def results():
         image_ids = evaluator.get_all_images()
         print(f"DEBUG: Using ALL {len(image_ids)} images from dataset")
     else:
-        image_ids = evaluator.get_random_images(n=50)
+        image_ids = evaluator.get_random_images(n=200)
         print(f"DEBUG: Using random sample of {len(image_ids)} images")
     
     session['test_image_ids'] = image_ids
@@ -292,7 +297,7 @@ def load_and_predict_custom():
         # Get a random test image
         image_ids = session.get('test_image_ids', [])
         if not image_ids:
-            image_ids = evaluator.get_random_images(n=50)
+            image_ids = evaluator.get_random_images(n=200)
             session['test_image_ids'] = image_ids
         
         # Use first image for validation
@@ -439,8 +444,9 @@ def execute_test():
                 
                 try:
                     # Initialize OOD evaluator
-                    ood_annotation_file = '/home/yuchen/YuchenZ/lab/Detector_test/OOD_dataset/OpenImage/Dataset_final/labels_new.json'
-                    ood_image_dir = '/home/yuchen/YuchenZ/lab/Detector_test/OOD_dataset/OpenImage/Dataset_final/data'
+                    ood_base_dir = PROJECT_ROOT / "OOD_dataset" / "OpenImage" / "Dataset_final"
+                    ood_annotation_file = str(ood_base_dir / "labels_new.json")
+                    ood_image_dir = str(ood_base_dir / "data")
                     ood_evaluator_instance = OODEvaluator(
                         annotation_file=ood_annotation_file,
                         image_dir=ood_image_dir,

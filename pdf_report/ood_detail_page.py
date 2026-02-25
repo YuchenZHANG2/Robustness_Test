@@ -24,7 +24,7 @@ from .table_utils import create_three_line_table_style
 # ============================================================================
 
 # Visualization parameters for confusion heatmap
-HEATMAP_CELL_SIZE = 0.6  # Size of each cell in inches
+HEATMAP_CELL_SIZE = 0.4  # Size of each cell in inches
 HEATMAP_PADDING_WIDTH = 2.0  # Horizontal padding for labels (inches)
 HEATMAP_PADDING_HEIGHT = 1.5  # Vertical padding for labels (inches)
 HEATMAP_DPI = 150  # Resolution for saved images

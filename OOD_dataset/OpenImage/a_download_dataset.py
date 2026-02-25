@@ -1,6 +1,12 @@
 import fiftyone as fo
 import fiftyone.zoo as foz
 from fiftyone import ViewField as F
+from pathlib import Path
+
+# Paths
+SCRIPT_DIR = Path(__file__).parent
+DATASET_DIR = SCRIPT_DIR / "Dataset"
+DATASET_FINAL_DIR = SCRIPT_DIR / "Dataset_final"
 
 # -----------------------------
 #  Download ~5000 images
@@ -16,7 +22,7 @@ dataset = foz.load_zoo_dataset(
 #  Export FULL dataset
 # -----------------------------
 dataset.export(
-    export_dir="/home/yuchen/YuchenZ/lab/Detector_test/OOD_dataset/OpenImage/Dataset",
+    export_dir=str(DATASET_DIR),
     dataset_type=fo.types.COCODetectionDataset,
 )
 
@@ -50,7 +56,6 @@ for sample in dataset:
             matching_sample_ids.append(sample.id)
 
 view = dataset.select(matching_sample_ids)
-print(f"Samples after requiring ≥1 target class: {len(view)}")
 
 # -----------------------------------------
 # Optional: require more than 1 TOTAL detection
@@ -60,7 +65,6 @@ view = view.match(
     F("ground_truth.detections").length() > 1
 )
 
-print(f"Samples after requiring >1 total detection: {len(view)}")
 
 # Optional: limit to 1000 samples
 view = view.limit(1500)
@@ -69,8 +73,17 @@ view = view.limit(1500)
 # Export dataset (ALL original detections kept)
 # -----------------------------------------
 view.export(
-    export_dir="/home/yuchen/YuchenZ/lab/Detector_test/OOD_dataset/OpenImage/Dataset_final",
+    export_dir=str(DATASET_FINAL_DIR),
     dataset_type=fo.types.COCODetectionDataset,
 )
 
 print("Filtered dataset exported.")
+
+# Clean up intermediate Dataset folder
+import shutil
+if DATASET_DIR.exists():
+    shutil.rmtree(DATASET_DIR)
+    print("Cleaned up intermediate Dataset folder.")
+
+
+

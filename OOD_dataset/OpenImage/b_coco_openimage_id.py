@@ -13,8 +13,9 @@ from collections import defaultdict
 
 # Paths
 SCRIPT_DIR = Path(__file__).parent
+PROJECT_ROOT = SCRIPT_DIR.parent.parent
 OPENIMAGES_LABELS = SCRIPT_DIR / "Dataset_final" / "labels.json"
-COCO_ANNOTATIONS = Path("/home/yuchen/YuchenZ/Datasets/coco/annotations/instances_val2017.json")
+COCO_ANNOTATIONS = PROJECT_ROOT / "Coco" / "annotations" / "instances_val2017.json"
 MAPPING_CSV = SCRIPT_DIR / "openimages_coco_mapping.csv"
 OUTPUT_FILE = SCRIPT_DIR / "Dataset_final" / "labels_new.json"
 

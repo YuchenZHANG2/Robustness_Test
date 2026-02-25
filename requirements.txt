@@ -1,16 +1,33 @@
-Flask==3.0.0
-Werkzeug==3.0.1
-numpy>=1.24.0
-Pillow>=10.0.0
-matplotlib>=3.7.0
-scikit-image>=0.21.0
-imagecorruptions>=1.1.2
-opencv-python>=4.8.0
+# Web Framework
+Flask>=3.0.0
+Werkzeug>=3.0.0
+
+# Deep Learning & Computer Vision
 torch>=2.0.0
 torchvision>=0.15.0
 transformers>=4.30.0
 ultralytics>=8.0.0
+timm>=0.9.0
+
+# Image Processing & Visualization
+opencv-python>=4.8.0
+Pillow>=10.0.0
+matplotlib>=3.7.0
+scikit-image>=0.21.0
+imagecorruptions>=1.1.2
+
+# Object Detection & Evaluation
 pycocotools>=2.0.6
-tqdm>=4.65.0
-timm
+
+# Dataset Management & Visualization
+fiftyone>=0.23.0
+huggingface_hub>=0.20.0
+
+# PDF Generation
 reportlab>=4.0.0
+
+# Scientific Computing & Utilities
+numpy>=1.24.0
+tqdm>=4.65.0
+
+

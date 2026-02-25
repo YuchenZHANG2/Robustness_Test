@@ -70,13 +70,13 @@ def create_severity_line_plot(corruption_name, results):
     
     plt.tight_layout()
     
-    # Convert plot to image
+    # Convert plot to image (slightly smaller to fit within page margins)
     img_buffer = io.BytesIO()
     plt.savefig(img_buffer, format='png', dpi=150, bbox_inches='tight')
     img_buffer.seek(0)
     plt.close(fig)
     
-    return RLImage(img_buffer, width=6.5*inch, height=3.2*inch)
+    return RLImage(img_buffer, width=6*inch, height=3*inch)
 
 
 def create_spider_chart(results):
@@ -218,13 +218,15 @@ def create_grid_image(vis_grid, padding=5):
     return grid_img
 
 
-def pil_image_to_reportlab(pil_image, target_width=7*inch):
+def pil_image_to_reportlab(pil_image, target_width=6*inch, max_height=8.5*inch):
     """
     Convert a PIL Image to a ReportLab Image with specified width, preserving aspect ratio.
+    Ensures the image fits within both width and height constraints.
     
     Args:
         pil_image: PIL Image object
-        target_width: Target width in ReportLab units (default: 7 inches)
+        target_width: Target width in ReportLab units (default: 6 inches)
+        max_height: Maximum height in ReportLab units (default: 8.5 inches)
         
     Returns:
         RLImage object
@@ -233,12 +235,20 @@ def pil_image_to_reportlab(pil_image, target_width=7*inch):
     pil_image.save(img_buffer, format='PNG')
     img_buffer.seek(0)
     
-    # Calculate height preserving aspect ratio
+    # Calculate dimensions preserving aspect ratio
     img_width, img_height = pil_image.size
     aspect_ratio = img_height / img_width
-    target_height = target_width * aspect_ratio
     
-    return RLImage(img_buffer, width=target_width, height=target_height)
+    # Start with target width
+    final_width = target_width
+    final_height = target_width * aspect_ratio
+    
+    # If height exceeds max, scale by height instead
+    if final_height > max_height:
+        final_height = max_height
+        final_width = max_height / aspect_ratio
+    
+    return RLImage(img_buffer, width=final_width, height=final_height)
 
 
 class ColumnHeadersFlowable(Flowable):

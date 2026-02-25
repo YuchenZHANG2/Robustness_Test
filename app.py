@@ -245,10 +245,10 @@ def results():
     # Get images based on USE_ALL_IMAGES debug flag
     if USE_ALL_IMAGES:
         image_ids = evaluator.get_all_images()
-        print(f"DEBUG: Using ALL {len(image_ids)} images from dataset")
+
     else:
         image_ids = evaluator.get_random_images(n=200)
-        print(f"DEBUG: Using random sample of {len(image_ids)} images")
+
     
     session['test_image_ids'] = image_ids
     
@@ -338,16 +338,13 @@ def run_testing():
 @app.route('/execute_test')
 def execute_test():
     """Execute the robustness test in background thread"""
-    print("DEBUG: execute_test endpoint called")
+
     
     model_keys = session.get('selected_detectors', [])
     custom_detector_hf = session.get('custom_detector_hf')
     corruptions = session.get('selected_corruptions', [])
     image_ids = session.get('test_image_ids', [])
-    
-    print(f"DEBUG: model_keys={model_keys}, custom_detector_hf={custom_detector_hf}")
-    print(f"DEBUG: corruptions={corruptions}, image_ids count={len(image_ids)}")
-    
+
     # Capture session values before starting background thread
     generate_pdf = session.get('generate_pdf', False)
     selected_detectors = session.get('selected_detectors', [])
@@ -383,7 +380,7 @@ def execute_test():
         global test_progress
         import json  # Import at function level to avoid scoping issues
         
-        print("DEBUG: Background thread started")
+
         
         try:
             test_progress.update({
@@ -391,24 +388,20 @@ def execute_test():
                 'progress': 0,
                 'message': 'Initializing test...'
             })
-            
-            print("DEBUG: Test progress initialized")
+
             
             # Separate OOD from actual corruptions
             # OOD is not a corruption, it's a separate evaluation
             actual_corruptions = [c for c in corruptions if c != 'ood']
             
-            print(f"DEBUG: Actual corruptions: {actual_corruptions}")
-            print(f"DEBUG: Model keys: {model_keys}")
-            
+
             # Run corruption tests (even if empty list, to get clean mAP)
             test = BatchOptimizedRobustnessTest(
                 model_loader, evaluator,
                 batch_size=4, num_workers=2
             )
             
-            print("DEBUG: Test object created")
-            
+
             def progress_callback(current, total, message):
                 global test_progress
                 # Scale test progress to 0-70% for corruption tests
@@ -594,11 +587,11 @@ def execute_test():
             import traceback
             traceback.print_exc()
     
-    print("DEBUG: About to start background thread")
+
     thread = threading.Thread(target=run_test_background)
     thread.daemon = True
     thread.start()
-    print("DEBUG: Background thread started")
+
     
     return jsonify({'success': True, 'message': 'Test started in background'})
 
@@ -723,9 +716,7 @@ def preview_corruption():
 @app.route('/interactive_preview')
 def interactive_preview():
     """Interactive corruption preview page"""
-    print(f"DEBUG: interactive_preview called")
-    print(f"DEBUG: evaluator = {evaluator}")
-    print(f"DEBUG: session = {dict(session)}")
+
     
     corruptions = session.get('selected_corruptions', [])
     
@@ -739,8 +730,7 @@ def interactive_preview():
     if evaluator is None:
         print("ERROR: evaluator is None, redirecting to step2")
         return redirect(url_for('step2'))
-    
-    print(f"DEBUG: Rendering interactive_preview with {len(corruptions)} corruptions")
+
     return render_template('interactive_preview.html', corruptions=corruptions)
 
 
@@ -748,7 +738,7 @@ def interactive_preview():
 @app.route('/api/random_image')
 def api_random_image():
     """Get a random image from the selected dataset"""
-    print(f"DEBUG: api_random_image called, evaluator is: {evaluator}")
+
     
     if evaluator is None:
         print("ERROR: evaluator is None")
@@ -764,7 +754,7 @@ def api_random_image():
         image_id = image_ids[0]
         image_info = evaluator.coco_gt.loadImgs(image_id)[0]
         
-        print(f"DEBUG: Returning image {image_id}: {image_info['file_name']}")
+
         
         return jsonify({
             'image_id': image_id,

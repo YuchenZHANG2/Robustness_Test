@@ -466,6 +466,15 @@ def _create_confusion_heatmap(
     fig_width = n_cols * HEATMAP_CELL_SIZE + HEATMAP_PADDING_WIDTH
     fig_height = n_rows * HEATMAP_CELL_SIZE + HEATMAP_PADDING_HEIGHT
     
+    # Constrain to page dimensions (leave margin for safety)
+    MAX_WIDTH = 6.0  # inches (page frame is 6.5, leave 0.5 margin)
+    MAX_HEIGHT = 8.5  # inches (page frame is 9, leave 0.5 margin)
+    
+    if fig_width > MAX_WIDTH:
+        fig_width = MAX_WIDTH
+    if fig_height > MAX_HEIGHT:
+        fig_height = MAX_HEIGHT
+    
     # Create matplotlib figure
     fig, ax = plt.subplots(figsize=(fig_width, fig_height))
     

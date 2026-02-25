@@ -70,8 +70,8 @@ def create_qualitative_grids(corruption_name, model_loader, evaluator, corruptor
             evaluator, corruptor, category_names
         )
         
-        # Convert to ReportLab image and add to elements
-        reportlab_img = pil_image_to_reportlab(grid_image, target_width=7*inch)
+        # Convert to ReportLab image and add to elements (fit within page margins)
+        reportlab_img = pil_image_to_reportlab(grid_image, target_width=6*inch, max_height=8.5*inch)
         elements.append(reportlab_img)
         elements.append(Spacer(1, 0.3*inch))
     

@@ -531,16 +531,17 @@ def execute_test():
                     if custom_detector_hf:
                         detector_names.append(f"Custom: {custom_detector_hf}")
                     
-                    # Load OOD results if they exist
+                    # Load OOD results only if OOD was selected
                     pdf_ood_results = None
-                    ood_results_path = 'static/ood_results.json'
-                    if os.path.exists(ood_results_path):
-                        try:
-                            if os.path.getsize(ood_results_path) > 0:
-                                with open(ood_results_path, 'r') as f:
-                                    pdf_ood_results = json.load(f)
-                        except Exception as e:
-                            print(f"Warning: Could not load OOD results for PDF: {e}")
+                    if 'ood' in corruptions:
+                        ood_results_path = 'static/ood_results.json'
+                        if os.path.exists(ood_results_path):
+                            try:
+                                if os.path.getsize(ood_results_path) > 0:
+                                    with open(ood_results_path, 'r') as f:
+                                        pdf_ood_results = json.load(f)
+                            except Exception as e:
+                                print(f"Warning: Could not load OOD results for PDF: {e}")
                     
                     # Filter out 'ood' from corruptions list for PDF (it's not a corruption)
                     actual_corruptions = [c for c in corruptions if c != 'ood']
@@ -633,21 +634,23 @@ def show_results():
     # Get PDF path from test progress (generated during background test)
     pdf_path = test_progress.get('pdf_path')
     
-    # Load OOD results if available
+    # Load OOD results only if OOD was selected in the current test
     ood_results = None
-    ood_results_path = 'static/ood_results.json'
-    if os.path.exists(ood_results_path):
-        try:
-            # Check if file is not empty
-            if os.path.getsize(ood_results_path) > 0:
-                with open(ood_results_path, 'r') as f:
-                    ood_results = json.load(f)
-            else:
-                print("Warning: ood_results.json exists but is empty")
-        except json.JSONDecodeError as e:
-            print(f"Warning: Failed to load OOD results: {e}")
-        except Exception as e:
-            print(f"Warning: Error reading OOD results: {e}")
+    selected_corruptions = session.get('selected_corruptions', [])
+    if 'ood' in selected_corruptions:
+        ood_results_path = 'static/ood_results.json'
+        if os.path.exists(ood_results_path):
+            try:
+                # Check if file is not empty
+                if os.path.getsize(ood_results_path) > 0:
+                    with open(ood_results_path, 'r') as f:
+                        ood_results = json.load(f)
+                else:
+                    print("Warning: ood_results.json exists but is empty")
+            except json.JSONDecodeError as e:
+                print(f"Warning: Failed to load OOD results: {e}")
+            except Exception as e:
+                print(f"Warning: Error reading OOD results: {e}")
     
     return render_template('show_results.html', 
                          results=sorted_results, 

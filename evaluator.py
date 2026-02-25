@@ -72,8 +72,8 @@ class COCOEvaluator:
         """
         if not predictions:
             return {'mAP': 0.0, 'mAP_50': 0.0, 'mAP_75': 0.0}
-        
-        # Filter predictions by class if specified
+
+                # Filter predictions by class if specified
         if self.filter_classes:
             predictions = [p for p in predictions if p['category_id'] in self.filter_classes]
         

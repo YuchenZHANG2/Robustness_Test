@@ -168,7 +168,7 @@ def _generate_image_grid(image_id, corruption_name, model_keys, model_loader,
         for severity in SEVERITY_LEVELS:
             # Apply corruption
             corrupted_image = _apply_corruption(
-                original_image, corruption_name, severity, corruptor
+                original_image, corruption_name, severity, corruptor, img_path
             )
             
             # Run detection
@@ -194,7 +194,84 @@ def _generate_image_grid(image_id, corruption_name, model_keys, model_loader,
     return create_grid_image(vis_grid)
 
 
-def _apply_corruption(original_image, corruption_name, severity, corruptor):
+def _apply_dust_corruption_single(clean_tensor, severity, device, clean_image_path=None):
+    """
+    Apply dust corruption to a single image tensor.
+    Matches the logic from batch_optimized_pipeline.py.
+    
+    Args:
+        clean_tensor: Clean image tensor (1, C, H, W) or (C, H, W)
+        severity: Severity level (1-5)
+        device: Device for computation
+        clean_image_path: Path to clean image (for finding matching dusty image)
+        
+    Returns:
+        Dusted tensor (same shape as input)
+    """
+    import cv2
+    
+    # Ensure tensor is 4D (1, C, H, W)
+    if clean_tensor.dim() == 3:
+        clean_tensor = clean_tensor.unsqueeze(0)
+    
+    # Severity determines blend weight: alpha * dust + (1-alpha) * clean
+    alpha_values = [0.2, 0.4, 0.6, 0.8, 1.0]
+    alpha = alpha_values[severity - 1]
+    beta = 1.0 - alpha
+    gamma = 0.0
+    
+    B, C, H, W = clean_tensor.shape
+    clean_tensor = clean_tensor.to(device)
+    
+    # Try to load real dusty image if path is provided
+    dust_tensor = None
+    if clean_image_path:
+        clean_path = Path(clean_image_path)
+        # Dust directory is in test folder (sibling of val2017 or data folder)
+        dust_dir = clean_path.parent.parent / 'test'
+        
+        if dust_dir.exists():
+            # Extract first 7 digits from clean image filename
+            clean_filename = clean_path.name
+            prefix = clean_filename[:7]
+            
+            # Find matching dusty image
+            matching_files = list(dust_dir.glob(f"{prefix}*"))
+            
+            if matching_files:
+                # Load dusty image
+                dust_path = matching_files[0]
+                dust_img = cv2.imread(str(dust_path))
+                dust_img = cv2.cvtColor(dust_img, cv2.COLOR_BGR2RGB)
+                dust_pil = PILImage.fromarray(dust_img)
+                
+                # Resize to match clean image size
+                dust_pil = dust_pil.resize((W, H), PILImage.BILINEAR)
+                
+                # Convert to tensor
+                dust_tensor = TF.to_tensor(dust_pil).to(device)  # (C, H, W)
+    
+    # Fallback: Generate procedural dust if no real dust image found
+    if dust_tensor is None:
+        dust_tensor = torch.ones((C, H, W), device=device)
+        
+        # Add noise/texture
+        noise = torch.randn((1, H, W), device=device) * 0.1 + 0.7
+        noise = torch.clamp(noise, 0, 1)
+        
+        # Make it yellowish-brown (dust color)
+        dust_tensor[0] = noise.squeeze() * 0.9  # R
+        dust_tensor[1] = noise.squeeze() * 0.8  # G
+        dust_tensor[2] = noise.squeeze() * 0.6  # B
+    
+    # Blend
+    dusted = alpha * dust_tensor + beta * clean_tensor.squeeze(0) + gamma
+    dusted = torch.clamp(dusted, 0.0, 1.0)
+    
+    return dusted.unsqueeze(0)
+
+
+def _apply_corruption(original_image, corruption_name, severity, corruptor, image_path=None):
     """
     Apply corruption to an image at a specific severity level.
     
@@ -203,6 +280,7 @@ def _apply_corruption(original_image, corruption_name, severity, corruptor):
         corruption_name: Name of the corruption
         severity: Severity level (0 for clean)
         corruptor: TorchCorruptions instance
+        image_path: Path to the original image (needed for dust corruption)
         
     Returns:
         PIL Image (corrupted or original if severity is 0)
@@ -216,8 +294,10 @@ def _apply_corruption(original_image, corruption_name, severity, corruptor):
     
     # Apply corruption
     if corruption_name == 'dust':
-        # Special handling for dust - skip or use simpler approach
-        corrupted_tensor = img_tensor
+        # Apply dust blending (same as batch pipeline)
+        corrupted_tensor = _apply_dust_corruption_single(
+            img_tensor, severity, corruptor.device, image_path
+        )
     else:
         corrupted_tensor = corruptor.corrupt(
             img_tensor, 
